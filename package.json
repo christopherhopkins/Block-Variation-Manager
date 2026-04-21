@@ -1,0 +1,7 @@
+{
+	"name": "block-variation-manager",
+	"version": "0.1.0",
+	"description": "Save any block's attributes as a named variation; propagate edits site-wide while preserving per-instance overrides.",
+	"private": true,
+	"type": "module"
+}
