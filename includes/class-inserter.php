@@ -52,7 +52,7 @@ class Inserter {
 			$attrs['bvmVariationId']     = $post->ID;
 			$attrs['bvmOverriddenAttrs'] = [];
 
-			$result[] = [
+			$definition = [
 				'name'        => 'bvm-' . $post->ID,
 				'title'       => $post->post_title,
 				'description' => sprintf(
@@ -63,6 +63,17 @@ class Inserter {
 				'scope'       => [ 'inserter', 'transform' ],
 				'attributes'  => $attrs,
 			];
+
+			// Attach the saved inner-block template so inserting the
+			// variation pre-populates its structure. Inner blocks are
+			// instance-local after insert — only the root attrs above
+			// propagate at render time.
+			$inner_blocks = CPT::get_inner_blocks( $post->ID );
+			if ( ! empty( $inner_blocks ) ) {
+				$definition['innerBlocks'] = $inner_blocks;
+			}
+
+			$result[] = $definition;
 		}
 		return $result;
 	}

@@ -27,6 +27,7 @@ const withVariationPanel = createHigherOrderComponent( ( BlockEdit ) => {
 					attributes={ props.attributes }
 					setAttributes={ props.setAttributes }
 					name={ props.name }
+					clientId={ props.clientId }
 				/>
 			</Fragment>
 		);

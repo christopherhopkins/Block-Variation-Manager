@@ -122,9 +122,27 @@ function noticeSuccess( message ) {
 	} );
 }
 
+/**
+ * Recursively turn [name, attrs, innerBlocks] tuples (the shape we persist
+ * in _bvm_variation_inner_blocks) into a tree of block objects ready for
+ * replaceInnerBlocks(). createBlock()'s third arg wants block objects, not
+ * tuples, so the recursion is necessary.
+ */
+function tuplesToBlocks( template ) {
+	if ( ! Array.isArray( template ) ) return [];
+	return template.map( ( [ name, attrs, inner ] ) =>
+		createBlock(
+			name,
+			attrs && typeof attrs === 'object' ? attrs : {},
+			tuplesToBlocks( inner )
+		)
+	);
+}
+
 function SourcePanel( {
 	attributes,
 	setAttributes,
+	clientId,
 	list,
 	listError,
 	openInitial,
@@ -135,6 +153,10 @@ function SourcePanel( {
 		: [];
 	const activeVariation = useVariationSnapshot( variationId );
 	const [ confirmUnlink, setConfirmUnlink ] = useState( false );
+	// Template the user is deciding whether to drop into the block. Only
+	// populated when a variation with inner blocks is picked. null = no
+	// pending decision; array = dialog open.
+	const [ pendingTemplate, setPendingTemplate ] = useState( null );
 
 	const options = useMemo( () => {
 		const opts = [
@@ -171,8 +193,43 @@ function SourcePanel( {
 						__( 'variation', 'block-variation-manager' )
 				)
 			);
+			// If the variation has a saved inner-block template, let the
+			// user decide whether to drop it in or keep the block's
+			// existing structure. Attrs are already applied above either
+			// way — only root attrs propagate.
+			const template = Array.isArray( picked?.inner_blocks )
+				? picked.inner_blocks
+				: [];
+			if ( template.length > 0 && clientId ) {
+				setPendingTemplate( template );
+			}
 		}
 	};
+
+	const onApplyTemplate = () => {
+		if ( ! pendingTemplate || ! clientId ) {
+			setPendingTemplate( null );
+			return;
+		}
+		const blocks = tuplesToBlocks( pendingTemplate );
+		// updateSelection=false keeps the user's current selection on the
+		// block they just applied the variation to, rather than jumping
+		// into the newly-inserted inner blocks.
+		dispatch( 'core/block-editor' ).replaceInnerBlocks(
+			clientId,
+			blocks,
+			false
+		);
+		setPendingTemplate( null );
+		noticeSuccess(
+			__(
+				'Replaced inner blocks with the variation template.',
+				'block-variation-manager'
+			)
+		);
+	};
+
+	const onKeepInnerBlocks = () => setPendingTemplate( null );
 
 	const onEditSource = () => {
 		if ( ! variationId ) return;
@@ -410,6 +467,26 @@ function SourcePanel( {
 				</ConfirmDialog>
 			) }
 
+			{ pendingTemplate && (
+				<ConfirmDialog
+					onConfirm={ onApplyTemplate }
+					onCancel={ onKeepInnerBlocks }
+					confirmButtonText={ __(
+						'Replace inner blocks',
+						'block-variation-manager'
+					) }
+					cancelButtonText={ __(
+						'Keep current inner blocks',
+						'block-variation-manager'
+					) }
+				>
+					{ __(
+						'This variation ships with its own inner blocks. Replace this block’s inner blocks with the variation’s template, or keep the current ones and only apply the variation to this parent block?',
+						'block-variation-manager'
+					) }
+				</ConfirmDialog>
+			) }
+
 			<Text
 				as="p"
 				variant="muted"
@@ -577,7 +654,12 @@ function SavePanel( { attributes, setAttributes, name, list } ) {
 	);
 }
 
-export default function VariationPanel( { attributes, setAttributes, name } ) {
+export default function VariationPanel( {
+	attributes,
+	setAttributes,
+	name,
+	clientId,
+} ) {
 	const variationId = attributes?.[ BVM_ATTR_VARIATION_ID ] || 0;
 	const { list, error } = useVariationsForBlock( name );
 
@@ -586,6 +668,7 @@ export default function VariationPanel( { attributes, setAttributes, name } ) {
 			<SourcePanel
 				attributes={ attributes }
 				setAttributes={ setAttributes }
+				clientId={ clientId }
 				list={ list }
 				listError={ error }
 				openInitial={ variationId > 0 }
