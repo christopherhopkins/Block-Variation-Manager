@@ -46,6 +46,13 @@ class CPT {
 	 * render-time merge (class-render.php) reads — keeping it fast and
 	 * avoiding a block-parse on every frontend render.
 	 *
+	 * Also captures the root block's inner blocks as a tuple template
+	 * ([name, attrs, innerBlocks]) so the inserter can pre-populate each
+	 * instance with the variation's structure. Inner blocks are *not*
+	 * propagated at render time — only the root attrs are. This is what
+	 * lets users build complex sections (and nest other variations)
+	 * without every edit fanning out to every instance.
+	 *
 	 * Also auto-populates the block_type meta if the user inserted a block
 	 * but the meta hadn't been set yet.
 	 */
@@ -56,6 +63,7 @@ class CPT {
 		$content = (string) $post->post_content;
 		if ( '' === trim( $content ) ) {
 			update_post_meta( $post_id, BVM_META_ATTRS, wp_json_encode( [] ) );
+			delete_post_meta( $post_id, BVM_META_INNER_BLOCKS );
 			return;
 		}
 		$blocks = parse_blocks( $content );
@@ -72,10 +80,40 @@ class CPT {
 		$attrs = is_array( $first['attrs'] ?? null ) ? $first['attrs'] : [];
 		update_post_meta( $post_id, BVM_META_ATTRS, wp_json_encode( $attrs ) );
 
+		$inner_tuples = self::blocks_to_tuples( $first['innerBlocks'] ?? [] );
+		if ( ! empty( $inner_tuples ) ) {
+			update_post_meta( $post_id, BVM_META_INNER_BLOCKS, wp_json_encode( $inner_tuples ) );
+		} else {
+			delete_post_meta( $post_id, BVM_META_INNER_BLOCKS );
+		}
+
 		$existing_block_type = get_post_meta( $post_id, BVM_META_BLOCK_TYPE, true );
 		if ( ! $existing_block_type ) {
 			update_post_meta( $post_id, BVM_META_BLOCK_TYPE, $first['blockName'] );
 		}
+	}
+
+	/**
+	 * Recursively convert parse_blocks() output into Gutenberg's block-variation
+	 * innerBlocks shape: an array of [ name, attrs, innerBlocks ] tuples.
+	 *
+	 * @param array<int,array<string,mixed>> $parsed
+	 * @return array<int,array{0:string,1:array<string,mixed>,2:array<int,mixed>}>
+	 */
+	private static function blocks_to_tuples( array $parsed ): array {
+		$out = [];
+		foreach ( $parsed as $b ) {
+			if ( empty( $b['blockName'] ) ) {
+				// Skip freeform / whitespace-only parse_blocks entries.
+				continue;
+			}
+			$out[] = [
+				(string) $b['blockName'],
+				is_array( $b['attrs'] ?? null ) ? $b['attrs'] : [],
+				self::blocks_to_tuples( $b['innerBlocks'] ?? [] ),
+			];
+		}
+		return $out;
 	}
 
 	public static function register(): void {
@@ -161,6 +199,21 @@ class CPT {
 	public static function get_block_type( int $variation_id ): ?string {
 		$value = get_post_meta( $variation_id, BVM_META_BLOCK_TYPE, true );
 		return is_string( $value ) && '' !== $value ? $value : null;
+	}
+
+	/**
+	 * Fetch the variation's inner-block template as [name, attrs, innerBlocks]
+	 * tuples, ready to attach to a registered block variation's innerBlocks.
+	 *
+	 * @return array<int,array{0:string,1:array<string,mixed>,2:array<int,mixed>}>
+	 */
+	public static function get_inner_blocks( int $variation_id ): array {
+		$raw = get_post_meta( $variation_id, BVM_META_INNER_BLOCKS, true );
+		if ( ! is_string( $raw ) || '' === $raw ) {
+			return [];
+		}
+		$decoded = json_decode( $raw, true );
+		return is_array( $decoded ) ? $decoded : [];
 	}
 
 	/**

@@ -257,11 +257,15 @@ class Rest {
 	/** @return array<string,mixed> */
 	private static function serialize( \WP_Post $post ): array {
 		return [
-			'id'         => $post->ID,
-			'title'      => $post->post_title,
-			'block_type' => CPT::get_block_type( $post->ID ),
-			'attrs'      => CPT::get_attrs( $post->ID ) ?? [],
-			'edit_link'  => get_edit_post_link( $post->ID, 'raw' ),
+			'id'           => $post->ID,
+			'title'        => $post->post_title,
+			'block_type'   => CPT::get_block_type( $post->ID ),
+			'attrs'        => CPT::get_attrs( $post->ID ) ?? [],
+			// Saved [ name, attrs, innerBlocks ] tuples. Clients use this to
+			// offer "replace inner blocks with the variation's template" on
+			// apply. Empty when the variation has no nested structure.
+			'inner_blocks' => CPT::get_inner_blocks( $post->ID ),
+			'edit_link'    => get_edit_post_link( $post->ID, 'raw' ),
 		];
 	}
 }
