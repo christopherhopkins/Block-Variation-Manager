@@ -202,6 +202,20 @@ class CPT {
 	}
 
 	/**
+	 * Whether a block type's static HTML needs server-side rebaking when its
+	 * variation changes. Default: core/* blocks (whose save() bakes attr
+	 * values directly into innerHTML). Libraries like Kadence don't need
+	 * this because their per-instance CSS is regenerated from attrs at
+	 * request time.
+	 *
+	 * Filter `bvm_block_needs_bake` to include/exclude specific blocks.
+	 */
+	public static function block_needs_bake( string $block_name ): bool {
+		$default = ( 0 === strpos( $block_name, 'core/' ) );
+		return (bool) apply_filters( 'bvm_block_needs_bake', $default, $block_name );
+	}
+
+	/**
 	 * Fetch the variation's inner-block template as [name, attrs, innerBlocks]
 	 * tuples, ready to attach to a registered block variation's innerBlocks.
 	 *
@@ -219,38 +233,46 @@ class CPT {
 	/**
 	 * List posts whose content references a given variation id.
 	 *
-	 * Admin-only — runs a LIKE against post_content. Capped at 200 rows.
+	 * Admin-only — runs a LIKE against post_content. Defaults match the old
+	 * 200-row cap; the propagation job passes explicit offset/limit to page
+	 * through larger result sets.
 	 *
 	 * @return array<int,array{id:int,title:string,post_type:string,edit_link:?string,status:string}>
 	 */
-	public static function list_usage( int $variation_id ): array {
+	public static function list_usage( int $variation_id, int $offset = 0, int $limit = 200 ): array {
 		global $wpdb;
 		if ( $variation_id <= 0 ) {
 			return [];
 		}
 		$needle = '"bvmVariationId":' . $variation_id;
 		$like   = '%' . $wpdb->esc_like( $needle ) . '%';
+		$limit  = max( 1, min( 500, $limit ) );
+		$offset = max( 0, $offset );
 		$sql    = $wpdb->prepare(
 			"SELECT ID, post_title, post_type, post_status FROM {$wpdb->posts}
 			 WHERE post_status IN ('publish','draft','pending','future','private')
 			 AND post_type NOT IN ('revision', %s)
 			 AND post_content LIKE %s
 			 ORDER BY post_modified DESC
-			 LIMIT 200",
+			 LIMIT %d OFFSET %d",
 			BVM_CPT,
-			$like
+			$like,
+			$limit,
+			$offset
 		);
 		$rows = $wpdb->get_results( $sql );
 		$out  = [];
 		foreach ( $rows as $row ) {
-			$id      = (int) $row->ID;
-			$title   = '' !== $row->post_title ? $row->post_title : __( '(no title)', 'block-variation-manager' );
-			$out[]   = [
+			$id        = (int) $row->ID;
+			$title     = '' !== $row->post_title ? $row->post_title : __( '(no title)', 'block-variation-manager' );
+			$permalink = get_permalink( $id );
+			$out[]     = [
 				'id'        => $id,
 				'title'     => $title,
 				'post_type' => $row->post_type,
 				'status'    => $row->post_status,
 				'edit_link' => get_edit_post_link( $id, 'raw' ),
+				'permalink' => is_string( $permalink ) && '' !== $permalink ? $permalink : null,
 			];
 		}
 		return $out;
