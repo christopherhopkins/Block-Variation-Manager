@@ -14,5 +14,6 @@ class Plugin {
 		Rest::init();
 		Inserter::init();
 		Assets::init();
+		Propagate::init();
 	}
 }

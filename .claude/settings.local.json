@@ -1,0 +1,21 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(npm run *)",
+      "Read(//c/Users/Hopki/Documents/Repos/NCSS/**)",
+      "Bash(git config *)",
+      "Bash(gh auth *)",
+      "Read(//c/Program Files/**)",
+      "Read(//c/Users/Hopki/AppData/Local/Programs/**)",
+      "PowerShell(Get-Command gh -ErrorAction SilentlyContinue)",
+      "Bash(git checkout *)",
+      "Bash(git add *)",
+      "Bash(git commit -m ' *)",
+      "Bash(git push *)",
+      "Bash(php -l includes/class-propagate.php)",
+      "Bash(php -l includes/class-cpt.php)",
+      "Bash(php -l includes/class-plugin.php)",
+      "Bash(php -l block-variation-manager.php)"
+    ]
+  }
+}
