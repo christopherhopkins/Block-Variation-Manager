@@ -15,5 +15,6 @@ class Plugin {
 		BlockRegistry::init();
 		Inserter::init();
 		Assets::init();
+		Propagate::init();
 	}
 }

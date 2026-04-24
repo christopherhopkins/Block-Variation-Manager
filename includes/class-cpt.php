@@ -61,8 +61,13 @@ class CPT {
 	 *      reconstruct attrs by parsing post_content and merging block-type
 	 *      defaults back in to undo the same parse_blocks lossiness.
 	 *
-	 * Also auto-populates block_type meta if the user inserted a block but
-	 * the meta hadn't been set yet.
+	 * Also captures the root block's inner blocks as a tuple template
+	 * ([name, attrs, innerBlocks]) so the inserter can pre-populate each
+	 * instance with the variation's structure. Inner blocks are *not*
+	 * propagated at render time — only the root attrs are.
+	 *
+	 * Also auto-populates the block_type meta if the user inserted a block
+	 * but the meta hadn't been set yet.
 	 */
 	public static function sync_attrs_from_content( int $post_id, \WP_Post $post ): void {
 		if ( wp_is_post_revision( $post_id ) || wp_is_post_autosave( $post_id ) ) {
@@ -81,7 +86,7 @@ class CPT {
 		$content = (string) $post->post_content;
 		if ( '' === trim( $content ) ) {
 			update_post_meta( $post_id, BVM_META_ATTRS, wp_json_encode( [] ) );
-			update_post_meta( $post_id, BVM_META_INNER_BLOCKS, wp_json_encode( [] ) );
+			delete_post_meta( $post_id, BVM_META_INNER_BLOCKS );
 			return;
 		}
 		$blocks = parse_blocks( $content );
@@ -99,8 +104,12 @@ class CPT {
 		$attrs        = self::merge_with_defaults( (string) $first['blockName'], $parsed_attrs );
 		update_post_meta( $post_id, BVM_META_ATTRS, wp_json_encode( $attrs ) );
 
-		$inner = self::shape_inner_tree( is_array( $first['innerBlocks'] ?? null ) ? $first['innerBlocks'] : [] );
-		update_post_meta( $post_id, BVM_META_INNER_BLOCKS, wp_json_encode( $inner ) );
+		$inner_tuples = self::blocks_to_tuples( is_array( $first['innerBlocks'] ?? null ) ? $first['innerBlocks'] : [] );
+		if ( ! empty( $inner_tuples ) ) {
+			update_post_meta( $post_id, BVM_META_INNER_BLOCKS, wp_json_encode( $inner_tuples ) );
+		} else {
+			delete_post_meta( $post_id, BVM_META_INNER_BLOCKS );
+		}
 
 		$existing_block_type = get_post_meta( $post_id, BVM_META_BLOCK_TYPE, true );
 		if ( ! $existing_block_type ) {
@@ -140,24 +149,27 @@ class CPT {
 	}
 
 	/**
-	 * Recursively normalize a parse_blocks() inner-blocks tree into the
-	 * { name, attributes, innerBlocks } shape stored in meta.
+	 * Recursively convert parse_blocks() output into Gutenberg's block-variation
+	 * innerBlocks shape: an array of [ name, attrs, innerBlocks ] tuples. Each
+	 * node's attrs are merged with the block type's registered defaults so
+	 * preset-driven attrs (which match defaults) survive an "apply" round-trip.
 	 *
-	 * @param array<int,array<string,mixed>> $blocks
-	 * @return array<int,array{name:string,attributes:array<string,mixed>,innerBlocks:array<int,mixed>}>
+	 * @param array<int,array<string,mixed>> $parsed
+	 * @return array<int,array{0:string,1:array<string,mixed>,2:array<int,mixed>}>
 	 */
-	public static function shape_inner_tree( array $blocks ): array {
+	private static function blocks_to_tuples( array $parsed ): array {
 		$out = [];
-		foreach ( $blocks as $b ) {
+		foreach ( $parsed as $b ) {
 			if ( empty( $b['blockName'] ) ) {
+				// Skip freeform / whitespace-only parse_blocks entries.
 				continue;
 			}
 			$name  = (string) $b['blockName'];
 			$attrs = is_array( $b['attrs'] ?? null ) ? $b['attrs'] : [];
 			$out[] = [
-				'name'        => $name,
-				'attributes'  => self::merge_with_defaults( $name, $attrs ),
-				'innerBlocks' => self::shape_inner_tree( is_array( $b['innerBlocks'] ?? null ) ? $b['innerBlocks'] : [] ),
+				$name,
+				self::merge_with_defaults( $name, $attrs ),
+				self::blocks_to_tuples( $b['innerBlocks'] ?? [] ),
 			];
 		}
 		return $out;
@@ -258,16 +270,32 @@ class CPT {
 		return is_array( $decoded ) ? $decoded : [];
 	}
 
+	public static function get_block_type( int $variation_id ): ?string {
+		$value = get_post_meta( $variation_id, BVM_META_BLOCK_TYPE, true );
+		return is_string( $value ) && '' !== $value ? $value : null;
+	}
+
 	/**
-	 * Fetch the saved inner-block tree for a variation post.
+	 * Whether a block type's static HTML needs server-side rebaking when its
+	 * variation changes. Default: core/* blocks (whose save() bakes attr
+	 * values directly into innerHTML). Libraries like Kadence don't need
+	 * this because their per-instance CSS is regenerated from attrs at
+	 * request time.
 	 *
-	 * @return array<int,array{name:string,attributes:array<string,mixed>,innerBlocks:array<int,mixed>}>
+	 * Filter `bvm_block_needs_bake` to include/exclude specific blocks.
+	 */
+	public static function block_needs_bake( string $block_name ): bool {
+		$default = ( 0 === strpos( $block_name, 'core/' ) );
+		return (bool) apply_filters( 'bvm_block_needs_bake', $default, $block_name );
+	}
+
+	/**
+	 * Fetch the variation's inner-block template as [name, attrs, innerBlocks]
+	 * tuples, ready to attach to a registered block variation's innerBlocks.
+	 *
+	 * @return array<int,array{0:string,1:array<string,mixed>,2:array<int,mixed>}>
 	 */
 	public static function get_inner_blocks( int $variation_id ): array {
-		$post = get_post( $variation_id );
-		if ( ! $post || BVM_CPT !== $post->post_type || 'publish' !== $post->post_status ) {
-			return [];
-		}
 		$raw = get_post_meta( $variation_id, BVM_META_INNER_BLOCKS, true );
 		if ( ! is_string( $raw ) || '' === $raw ) {
 			return [];
@@ -276,46 +304,49 @@ class CPT {
 		return is_array( $decoded ) ? $decoded : [];
 	}
 
-	public static function get_block_type( int $variation_id ): ?string {
-		$value = get_post_meta( $variation_id, BVM_META_BLOCK_TYPE, true );
-		return is_string( $value ) && '' !== $value ? $value : null;
-	}
-
 	/**
 	 * List posts whose content references a given variation id.
 	 *
-	 * Admin-only — runs a LIKE against post_content. Capped at 200 rows.
+	 * Admin-only — runs a LIKE against post_content. Defaults match the old
+	 * 200-row cap; the propagation job passes explicit offset/limit to page
+	 * through larger result sets.
 	 *
 	 * @return array<int,array{id:int,title:string,post_type:string,edit_link:?string,status:string}>
 	 */
-	public static function list_usage( int $variation_id ): array {
+	public static function list_usage( int $variation_id, int $offset = 0, int $limit = 200 ): array {
 		global $wpdb;
 		if ( $variation_id <= 0 ) {
 			return [];
 		}
 		$needle = '"bvmVariationId":' . $variation_id;
 		$like   = '%' . $wpdb->esc_like( $needle ) . '%';
+		$limit  = max( 1, min( 500, $limit ) );
+		$offset = max( 0, $offset );
 		$sql    = $wpdb->prepare(
 			"SELECT ID, post_title, post_type, post_status FROM {$wpdb->posts}
 			 WHERE post_status IN ('publish','draft','pending','future','private')
 			 AND post_type NOT IN ('revision', %s)
 			 AND post_content LIKE %s
 			 ORDER BY post_modified DESC
-			 LIMIT 200",
+			 LIMIT %d OFFSET %d",
 			BVM_CPT,
-			$like
+			$like,
+			$limit,
+			$offset
 		);
 		$rows = $wpdb->get_results( $sql );
 		$out  = [];
 		foreach ( $rows as $row ) {
-			$id      = (int) $row->ID;
-			$title   = '' !== $row->post_title ? $row->post_title : __( '(no title)', 'block-variation-manager' );
-			$out[]   = [
+			$id        = (int) $row->ID;
+			$title     = '' !== $row->post_title ? $row->post_title : __( '(no title)', 'block-variation-manager' );
+			$permalink = get_permalink( $id );
+			$out[]     = [
 				'id'        => $id,
 				'title'     => $title,
 				'post_type' => $row->post_type,
 				'status'    => $row->post_status,
 				'edit_link' => get_edit_post_link( $id, 'raw' ),
+				'permalink' => is_string( $permalink ) && '' !== $permalink ? $permalink : null,
 			];
 		}
 		return $out;

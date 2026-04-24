@@ -262,11 +262,13 @@ class Rest {
 
 	/**
 	 * Coerce an arbitrary client-supplied tree into the
-	 * { name, attributes, innerBlocks } shape we store. Drops anything
-	 * without a non-empty `name`.
+	 * [ name, attrs, innerBlocks ] tuple shape we store. Accepts either the
+	 * WordPress-native { name, attributes, innerBlocks } object shape (what
+	 * the editor sends via `getBlocks(clientId)`) or pre-shaped tuples.
+	 * Drops anything without a non-empty name.
 	 *
 	 * @param array<int,mixed> $tree
-	 * @return array<int,array{name:string,attributes:array<string,mixed>,innerBlocks:array<int,mixed>}>
+	 * @return array<int,array{0:string,1:array<string,mixed>,2:array<int,mixed>}>
 	 */
 	private static function sanitize_inner_tree( array $tree ): array {
 		$out = [];
@@ -274,16 +276,23 @@ class Rest {
 			if ( ! is_array( $node ) ) {
 				continue;
 			}
-			$name = isset( $node['name'] ) && is_string( $node['name'] ) ? $node['name'] : '';
+			// Tuple shape: [ name, attrs, innerBlocks ].
+			if ( isset( $node[0] ) && is_string( $node[0] ) ) {
+				$name     = $node[0];
+				$attrs    = isset( $node[1] ) && is_array( $node[1] ) ? $node[1] : [];
+				$children = isset( $node[2] ) && is_array( $node[2] ) ? $node[2] : [];
+			} else {
+				$name     = isset( $node['name'] ) && is_string( $node['name'] ) ? $node['name'] : '';
+				$attrs    = isset( $node['attributes'] ) && is_array( $node['attributes'] ) ? $node['attributes'] : [];
+				$children = isset( $node['innerBlocks'] ) && is_array( $node['innerBlocks'] ) ? $node['innerBlocks'] : [];
+			}
 			if ( '' === $name ) {
 				continue;
 			}
-			$attrs    = isset( $node['attributes'] ) && is_array( $node['attributes'] ) ? $node['attributes'] : [];
-			$children = isset( $node['innerBlocks'] ) && is_array( $node['innerBlocks'] ) ? $node['innerBlocks'] : [];
-			$out[]    = [
-				'name'        => $name,
-				'attributes'  => $attrs,
-				'innerBlocks' => self::sanitize_inner_tree( $children ),
+			$out[] = [
+				$name,
+				$attrs,
+				self::sanitize_inner_tree( $children ),
 			];
 		}
 		return $out;
@@ -319,6 +328,9 @@ class Rest {
 			'title'        => $post->post_title,
 			'block_type'   => CPT::get_block_type( $post->ID ),
 			'attrs'        => CPT::get_attrs( $post->ID ) ?? [],
+			// Saved [ name, attrs, innerBlocks ] tuples. Clients use this to
+			// offer "replace inner blocks with the variation's template" on
+			// apply. Empty when the variation has no nested structure.
 			'inner_blocks' => CPT::get_inner_blocks( $post->ID ),
 			'edit_link'    => get_edit_post_link( $post->ID, 'raw' ),
 		];

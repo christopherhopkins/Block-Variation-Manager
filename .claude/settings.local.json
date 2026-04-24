@@ -2,7 +2,8 @@
   "permissions": {
     "allow": [
       "Bash(npx --yes @wordpress/scripts@latest build --webpack-src-dir=source --output-path=build)",
-      "Bash(npx --yes @wordpress/scripts@latest build --config=webpack.config.cjs)"
+      "Bash(npx --yes @wordpress/scripts@latest build --config=webpack.config.cjs)",
+      "Bash(git add *)"
     ]
   }
 }

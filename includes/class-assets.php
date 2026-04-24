@@ -8,6 +8,45 @@ if ( ! defined( 'ABSPATH' ) ) {
 class Assets {
 	public static function init(): void {
 		add_action( 'enqueue_block_editor_assets', [ self::class, 'enqueue_editor' ] );
+		add_filter( 'block_editor_settings_all', [ self::class, 'seed_variation_template' ], 10, 2 );
+	}
+
+	/**
+	 * Seed the variation editor with the correct root block.
+	 *
+	 * NOTE: we intentionally do not set templateLock here. A root-level
+	 * templateLock cascades to inner blocks, which would block the user
+	 * from building nested structures inside the variation. Root-only
+	 * enforcement (exactly one block of $block_type) is done client-side
+	 * in source/admin/variation-editor.js — that lets inner-block editing
+	 * stay fully unrestricted, which is the whole point of allowing inner
+	 * blocks in variations.
+	 *
+	 * @param array<string,mixed>      $settings
+	 * @param \WP_Block_Editor_Context $context
+	 * @return array<string,mixed>
+	 */
+	public static function seed_variation_template( $settings, $context ) {
+		$block_type = self::variation_block_type_for_context( $context );
+		if ( null === $block_type ) {
+			return $settings;
+		}
+		if ( empty( $settings['template'] ) ) {
+			$settings['template'] = [ [ $block_type ] ];
+		}
+		return $settings;
+	}
+
+	private static function variation_block_type_for_context( $context ): ?string {
+		if ( ! $context instanceof \WP_Block_Editor_Context ) {
+			return null;
+		}
+		$post = $context->post ?? null;
+		if ( ! $post instanceof \WP_Post || BVM_CPT !== $post->post_type ) {
+			return null;
+		}
+		$block_type = CPT::get_block_type( (int) $post->ID );
+		return ( is_string( $block_type ) && '' !== $block_type ) ? $block_type : null;
 	}
 
 	public static function enqueue_editor(): void {

@@ -52,7 +52,7 @@ class Inserter {
 			$attrs['bvmVariationId']     = $post->ID;
 			$attrs['bvmOverriddenAttrs'] = [];
 
-			$variation = [
+			$definition = [
 				'name'        => 'bvm-' . $post->ID,
 				'title'       => $post->post_title,
 				'description' => sprintf(
@@ -64,41 +64,18 @@ class Inserter {
 				'attributes'  => $attrs,
 			];
 
-			// For parent blocks with required children (kadence/accordion+pane,
-			// kadence/advancedbtn+singlebtn, etc.), restore the captured tree.
-			// Gutenberg's variation `innerBlocks` shape is recursive nested
-			// triples: [ [ name, attributes, innerBlocks[] ], ... ].
-			$inner = CPT::get_inner_blocks( $post->ID );
-			if ( ! empty( $inner ) ) {
-				$variation['innerBlocks'] = self::shape_for_inserter( $inner );
+			// Attach the saved inner-block template so inserting the
+			// variation pre-populates its structure. Inner blocks are
+			// instance-local after insert — only the root attrs above
+			// propagate at render time. Already stored as Gutenberg's
+			// nested-tuple shape: [ [ name, attrs, innerBlocks[] ], ... ].
+			$inner_blocks = CPT::get_inner_blocks( $post->ID );
+			if ( ! empty( $inner_blocks ) ) {
+				$definition['innerBlocks'] = $inner_blocks;
 			}
 
-			$result[] = $variation;
+			$result[] = $definition;
 		}
 		return $result;
-	}
-
-	/**
-	 * Convert the stored { name, attributes, innerBlocks } tree into the
-	 * nested-triple shape Gutenberg's block variations expect.
-	 *
-	 * @param array<int,array{name:string,attributes:array<string,mixed>,innerBlocks:array<int,mixed>}> $tree
-	 * @return array<int,array{0:string,1:array<string,mixed>,2:array<int,mixed>}>
-	 */
-	private static function shape_for_inserter( array $tree ): array {
-		$out = [];
-		foreach ( $tree as $node ) {
-			if ( empty( $node['name'] ) ) {
-				continue;
-			}
-			$attrs    = is_array( $node['attributes'] ?? null ) ? $node['attributes'] : [];
-			$children = is_array( $node['innerBlocks'] ?? null ) ? $node['innerBlocks'] : [];
-			$out[]    = [
-				$node['name'],
-				$attrs,
-				self::shape_for_inserter( $children ),
-			];
-		}
-		return $out;
 	}
 }

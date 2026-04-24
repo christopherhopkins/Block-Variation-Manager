@@ -31,6 +31,7 @@ require_once BVM_DIR . 'includes/class-rest.php';
 require_once BVM_DIR . 'includes/class-inserter.php';
 require_once BVM_DIR . 'includes/class-assets.php';
 require_once BVM_DIR . 'includes/class-block-registry.php';
+require_once BVM_DIR . 'includes/class-propagate.php';
 require_once BVM_DIR . 'includes/class-plugin.php';
 
 Plugin::init();

@@ -103,24 +103,6 @@ function shapeInnerBlocks( blocks ) {
 		} ) );
 }
 
-/**
- * Build a tree of `createBlock()` instances from a stored
- * { name, attributes, innerBlocks } variation tree, ready to hand to
- * `replaceInnerBlocks`.
- */
-function buildBlocksFromTree( tree ) {
-	if ( ! Array.isArray( tree ) ) return [];
-	return tree
-		.filter( ( node ) => node && typeof node.name === 'string' && node.name !== '' )
-		.map( ( node ) =>
-			createBlock(
-				node.name,
-				node.attributes ?? {},
-				buildBlocksFromTree( node.innerBlocks )
-			)
-		);
-}
-
 /** Kadence class-pair convention: `fooClass` ↔ `foo`. */
 function kadenceClassPair( key ) {
 	if ( key.endsWith( 'Class' ) && key.length > 5 ) {
@@ -158,6 +140,23 @@ function noticeSuccess( message ) {
 		type: 'snackbar',
 		isDismissible: true,
 	} );
+}
+
+/**
+ * Recursively turn [name, attrs, innerBlocks] tuples (the shape we persist
+ * in _bvm_variation_inner_blocks) into a tree of block objects ready for
+ * replaceInnerBlocks(). createBlock()'s third arg wants block objects, not
+ * tuples, so the recursion is necessary.
+ */
+function tuplesToBlocks( template ) {
+	if ( ! Array.isArray( template ) ) return [];
+	return template.map( ( [ name, attrs, inner ] ) =>
+		createBlock(
+			name,
+			attrs && typeof attrs === 'object' ? attrs : {},
+			tuplesToBlocks( inner )
+		)
+	);
 }
 
 function SourcePanel( {
@@ -205,7 +204,7 @@ function SourcePanel( {
 			[ BVM_ATTR_OVERRIDES ]: [],
 		} );
 		if ( replaceChildren && clientId && Array.isArray( sourceInner ) ) {
-			const blocks = buildBlocksFromTree( sourceInner );
+			const blocks = tuplesToBlocks( sourceInner );
 			dispatch( 'core/block-editor' )?.replaceInnerBlocks?.(
 				clientId,
 				blocks,
@@ -570,12 +569,14 @@ function SavePanel( { attributes, setAttributes, name, clientId, list } ) {
 			// with kadence/singlebtn children). Reading via getBlocks
 			// gives us resolved attrs from the editor, not the lossy
 			// serialized comment representation.
+			let liveChildren;
 			let innerBlocks;
 			if ( clientId && hasRequiredChildren( name ) ) {
 				const children = select( 'core/block-editor' )?.getBlocks?.(
 					clientId
 				);
 				if ( Array.isArray( children ) && children.length > 0 ) {
+					liveChildren = children;
 					innerBlocks = shapeInnerBlocks( children );
 				}
 			}
@@ -583,9 +584,7 @@ function SavePanel( { attributes, setAttributes, name, clientId, list } ) {
 			const block = createBlock(
 				name,
 				preset,
-				Array.isArray( innerBlocks )
-					? buildBlocksFromTree( innerBlocks )
-					: []
+				Array.isArray( liveChildren ) ? liveChildren : []
 			);
 			const content = serialize( block );
 			const created = await createVariation( {
