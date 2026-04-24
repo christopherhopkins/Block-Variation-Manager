@@ -42,20 +42,46 @@ class CPT {
 
 	/**
 	 * After a variation post is saved, parse its first block out of
-	 * post_content and mirror its attributes into meta. The meta is what the
-	 * render-time merge (class-render.php) reads — keeping it fast and
-	 * avoiding a block-parse on every frontend render.
+	 * post_content and mirror its attributes (and inner-block tree) into meta.
+	 * The meta is what the render-time merge (class-render.php) and the
+	 * editor-side variation registration (class-inserter.php) read.
 	 *
-	 * Also auto-populates the block_type meta if the user inserted a block
-	 * but the meta hadn't been set yet.
+	 * Two save paths exist:
+	 *
+	 *   1. REST (Rest::create_variation / update_variation) — supplies the
+	 *      full attribute set including default-equal values, then writes
+	 *      meta directly and tags BVM_META_ATTRS_SOURCE = 'rest'. We must
+	 *      NOT overwrite that meta here, because parse_blocks() loses any
+	 *      attr that happens to equal a block.json default. Dropping those
+	 *      breaks "apply" for preset-driven blocks (kadence/infobox etc.):
+	 *      preset-set attrs that match defaults silently disappear from the
+	 *      variation, so applying it to an existing block can't reset them.
+	 *
+	 *   2. Block editor on the variation post itself — no REST tag. We
+	 *      reconstruct attrs by parsing post_content and merging block-type
+	 *      defaults back in to undo the same parse_blocks lossiness.
+	 *
+	 * Also auto-populates block_type meta if the user inserted a block but
+	 * the meta hadn't been set yet.
 	 */
 	public static function sync_attrs_from_content( int $post_id, \WP_Post $post ): void {
 		if ( wp_is_post_revision( $post_id ) || wp_is_post_autosave( $post_id ) ) {
 			return;
 		}
+
+		// REST already wrote meta with the full attr set. The 'rest' tag is
+		// single-use — clear it so a subsequent block-editor edit on the
+		// variation post falls back to the parse-and-merge path.
+		$source = get_post_meta( $post_id, BVM_META_ATTRS_SOURCE, true );
+		if ( 'rest' === $source ) {
+			delete_post_meta( $post_id, BVM_META_ATTRS_SOURCE );
+			return;
+		}
+
 		$content = (string) $post->post_content;
 		if ( '' === trim( $content ) ) {
 			update_post_meta( $post_id, BVM_META_ATTRS, wp_json_encode( [] ) );
+			update_post_meta( $post_id, BVM_META_INNER_BLOCKS, wp_json_encode( [] ) );
 			return;
 		}
 		$blocks = parse_blocks( $content );
@@ -69,13 +95,72 @@ class CPT {
 		if ( null === $first ) {
 			return;
 		}
-		$attrs = is_array( $first['attrs'] ?? null ) ? $first['attrs'] : [];
+		$parsed_attrs = is_array( $first['attrs'] ?? null ) ? $first['attrs'] : [];
+		$attrs        = self::merge_with_defaults( (string) $first['blockName'], $parsed_attrs );
 		update_post_meta( $post_id, BVM_META_ATTRS, wp_json_encode( $attrs ) );
+
+		$inner = self::shape_inner_tree( is_array( $first['innerBlocks'] ?? null ) ? $first['innerBlocks'] : [] );
+		update_post_meta( $post_id, BVM_META_INNER_BLOCKS, wp_json_encode( $inner ) );
 
 		$existing_block_type = get_post_meta( $post_id, BVM_META_BLOCK_TYPE, true );
 		if ( ! $existing_block_type ) {
 			update_post_meta( $post_id, BVM_META_BLOCK_TYPE, $first['blockName'] );
 		}
+	}
+
+	/**
+	 * Merge `parse_blocks()` attrs with the block type's registered defaults.
+	 *
+	 * `parse_blocks()` returns only attrs that were serialized into the block
+	 * comment — i.e. attrs whose value differs from the block.json default.
+	 * For "apply variation to existing block" to work, the variation needs
+	 * the FULL effective attr set so default-equal preset attrs can be
+	 * written back on top of an existing block's non-default values.
+	 *
+	 * @param array<string,mixed> $attrs
+	 * @return array<string,mixed>
+	 */
+	public static function merge_with_defaults( string $block_name, array $attrs ): array {
+		if ( '' === $block_name || ! class_exists( '\\WP_Block_Type_Registry' ) ) {
+			return $attrs;
+		}
+		$registry   = \WP_Block_Type_Registry::get_instance();
+		$block_type = $registry ? $registry->get_registered( $block_name ) : null;
+		if ( ! $block_type || ! is_array( $block_type->attributes ?? null ) ) {
+			return $attrs;
+		}
+		$defaults = [];
+		foreach ( $block_type->attributes as $name => $schema ) {
+			if ( is_array( $schema ) && array_key_exists( 'default', $schema ) ) {
+				$defaults[ $name ] = $schema['default'];
+			}
+		}
+		// Parsed attrs win — they represent intentional non-default values.
+		return array_merge( $defaults, $attrs );
+	}
+
+	/**
+	 * Recursively normalize a parse_blocks() inner-blocks tree into the
+	 * { name, attributes, innerBlocks } shape stored in meta.
+	 *
+	 * @param array<int,array<string,mixed>> $blocks
+	 * @return array<int,array{name:string,attributes:array<string,mixed>,innerBlocks:array<int,mixed>}>
+	 */
+	public static function shape_inner_tree( array $blocks ): array {
+		$out = [];
+		foreach ( $blocks as $b ) {
+			if ( empty( $b['blockName'] ) ) {
+				continue;
+			}
+			$name  = (string) $b['blockName'];
+			$attrs = is_array( $b['attrs'] ?? null ) ? $b['attrs'] : [];
+			$out[] = [
+				'name'        => $name,
+				'attributes'  => self::merge_with_defaults( $name, $attrs ),
+				'innerBlocks' => self::shape_inner_tree( is_array( $b['innerBlocks'] ?? null ) ? $b['innerBlocks'] : [] ),
+			];
+		}
+		return $out;
 	}
 
 	public static function register(): void {
@@ -138,6 +223,21 @@ class CPT {
 				},
 			]
 		);
+
+		register_post_meta(
+			BVM_CPT,
+			BVM_META_INNER_BLOCKS,
+			[
+				'type'          => 'string',
+				'single'        => true,
+				'show_in_rest'  => [
+					'schema' => [ 'type' => 'string' ],
+				],
+				'auth_callback' => function () {
+					return current_user_can( 'edit_posts' );
+				},
+			]
+		);
 	}
 
 	/**
@@ -151,6 +251,24 @@ class CPT {
 			return null;
 		}
 		$raw = get_post_meta( $variation_id, BVM_META_ATTRS, true );
+		if ( ! is_string( $raw ) || '' === $raw ) {
+			return [];
+		}
+		$decoded = json_decode( $raw, true );
+		return is_array( $decoded ) ? $decoded : [];
+	}
+
+	/**
+	 * Fetch the saved inner-block tree for a variation post.
+	 *
+	 * @return array<int,array{name:string,attributes:array<string,mixed>,innerBlocks:array<int,mixed>}>
+	 */
+	public static function get_inner_blocks( int $variation_id ): array {
+		$post = get_post( $variation_id );
+		if ( ! $post || BVM_CPT !== $post->post_type || 'publish' !== $post->post_status ) {
+			return [];
+		}
+		$raw = get_post_meta( $variation_id, BVM_META_INNER_BLOCKS, true );
 		if ( ! is_string( $raw ) || '' === $raw ) {
 			return [];
 		}

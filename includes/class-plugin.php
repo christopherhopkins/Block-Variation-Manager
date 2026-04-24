@@ -12,6 +12,7 @@ class Plugin {
 		Attributes::init();
 		Render::init();
 		Rest::init();
+		BlockRegistry::init();
 		Inserter::init();
 		Assets::init();
 	}

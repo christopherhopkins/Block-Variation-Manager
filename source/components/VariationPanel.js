@@ -31,6 +31,10 @@ import {
 	ensureVariationLoaded,
 } from '../lib/variation-store.js';
 import {
+	ensureRegistryLoaded,
+	hasRequiredChildren,
+} from '../lib/block-registry.js';
+import {
 	BVM_ATTR_VARIATION_ID,
 	BVM_ATTR_OVERRIDES,
 	INTERNAL_ATTRS,
@@ -83,6 +87,40 @@ function extractPresetAttrs( attributes ) {
 	return out;
 }
 
+/**
+ * Recursively shape a tree of editor block objects into the
+ * { name, attributes, innerBlocks } payload the REST endpoint stores.
+ * Strips BVM bookkeeping attrs and undefined values.
+ */
+function shapeInnerBlocks( blocks ) {
+	if ( ! Array.isArray( blocks ) ) return [];
+	return blocks
+		.filter( ( b ) => b && typeof b.name === 'string' && b.name !== '' )
+		.map( ( b ) => ( {
+			name: b.name,
+			attributes: extractPresetAttrs( b.attributes ?? {} ),
+			innerBlocks: shapeInnerBlocks( b.innerBlocks ),
+		} ) );
+}
+
+/**
+ * Build a tree of `createBlock()` instances from a stored
+ * { name, attributes, innerBlocks } variation tree, ready to hand to
+ * `replaceInnerBlocks`.
+ */
+function buildBlocksFromTree( tree ) {
+	if ( ! Array.isArray( tree ) ) return [];
+	return tree
+		.filter( ( node ) => node && typeof node.name === 'string' && node.name !== '' )
+		.map( ( node ) =>
+			createBlock(
+				node.name,
+				node.attributes ?? {},
+				buildBlocksFromTree( node.innerBlocks )
+			)
+		);
+}
+
 /** Kadence class-pair convention: `fooClass` ↔ `foo`. */
 function kadenceClassPair( key ) {
 	if ( key.endsWith( 'Class' ) && key.length > 5 ) {
@@ -125,6 +163,7 @@ function noticeSuccess( message ) {
 function SourcePanel( {
 	attributes,
 	setAttributes,
+	clientId,
 	list,
 	listError,
 	openInitial,
@@ -135,6 +174,11 @@ function SourcePanel( {
 		: [];
 	const activeVariation = useVariationSnapshot( variationId );
 	const [ confirmUnlink, setConfirmUnlink ] = useState( false );
+	// When user picks a variation that includes inner blocks AND the live
+	// block already has children, defer the assignment until they confirm
+	// whether to replace or keep existing children.
+	// Shape: { id, title, innerBlocks }
+	const [ pendingApply, setPendingApply ] = useState( null );
 
 	const options = useMemo( () => {
 		const opts = [
@@ -155,23 +199,65 @@ function SourcePanel( {
 
 	const isOrphaned = variationId > 0 && activeVariation === null;
 
-	const onPickVariation = ( value ) => {
-		const id = parseInt( value, 10 );
+	const finalizePick = ( id, title, replaceChildren, sourceInner ) => {
 		setAttributes( {
 			[ BVM_ATTR_VARIATION_ID ]: id,
 			[ BVM_ATTR_OVERRIDES ]: [],
 		} );
+		if ( replaceChildren && clientId && Array.isArray( sourceInner ) ) {
+			const blocks = buildBlocksFromTree( sourceInner );
+			dispatch( 'core/block-editor' )?.replaceInnerBlocks?.(
+				clientId,
+				blocks,
+				false
+			);
+		}
 		if ( id > 0 ) {
-			const picked = list?.find( ( v ) => v.id === id );
 			noticeSuccess(
 				sprintf(
 					/* translators: %s: variation title */
 					__( 'Applied variation: %s', 'block-variation-manager' ),
-					picked?.title ??
-						__( 'variation', 'block-variation-manager' )
+					title ?? __( 'variation', 'block-variation-manager' )
 				)
 			);
 		}
+	};
+
+	const onPickVariation = async ( value ) => {
+		const id = parseInt( value, 10 );
+		if ( id <= 0 ) {
+			finalizePick( id, null, false, null );
+			return;
+		}
+		const picked = list?.find( ( v ) => v.id === id );
+		// We need the full variation record (cached or freshly fetched) to
+		// know whether the source has inner blocks worth restoring. The
+		// list endpoint already returns inner_blocks per row, but cache may
+		// not be warm if the user opened the dropdown immediately.
+		const loaded = await ensureVariationLoaded( id );
+		const sourceInner = Array.isArray( loaded?.inner_blocks )
+			? loaded.inner_blocks
+			: [];
+		const existingChildren = clientId
+			? select( 'core/block-editor' )?.getBlocks?.( clientId ) ?? []
+			: [];
+
+		// No inner blocks on the source → behave like before; attr-only sync.
+		if ( sourceInner.length === 0 ) {
+			finalizePick( id, picked?.title, false, null );
+			return;
+		}
+		// Source has inner blocks but the target is empty → restore silently.
+		if ( existingChildren.length === 0 ) {
+			finalizePick( id, picked?.title, true, sourceInner );
+			return;
+		}
+		// Both sides have children — ask before clobbering the user's work.
+		setPendingApply( {
+			id,
+			title: picked?.title,
+			innerBlocks: sourceInner,
+		} );
 	};
 
 	const onEditSource = () => {
@@ -410,6 +496,36 @@ function SourcePanel( {
 				</ConfirmDialog>
 			) }
 
+			{ pendingApply && (
+				<ConfirmDialog
+					onConfirm={ () => {
+						const p = pendingApply;
+						setPendingApply( null );
+						finalizePick( p.id, p.title, true, p.innerBlocks );
+					} }
+					onCancel={ () => {
+						const p = pendingApply;
+						setPendingApply( null );
+						// User opted to keep existing children — apply
+						// attrs only, don't touch innerBlocks.
+						finalizePick( p.id, p.title, false, null );
+					} }
+					confirmButtonText={ __(
+						'Replace children',
+						'block-variation-manager'
+					) }
+					cancelButtonText={ __(
+						'Keep existing children',
+						'block-variation-manager'
+					) }
+				>
+					{ __(
+						'This variation includes child blocks. Replace this block\u2019s existing children with the variation\u2019s, or keep the current ones?',
+						'block-variation-manager'
+					) }
+				</ConfirmDialog>
+			) }
+
 			<Text
 				as="p"
 				variant="muted"
@@ -425,7 +541,7 @@ function SourcePanel( {
 	);
 }
 
-function SavePanel( { attributes, setAttributes, name, list } ) {
+function SavePanel( { attributes, setAttributes, name, clientId, list } ) {
 	const [ newName, setNewName ] = useState( '' );
 	const [ isSaving, setIsSaving ] = useState( false );
 	const [ saveError, setSaveError ] = useState( null );
@@ -448,13 +564,36 @@ function SavePanel( { attributes, setAttributes, name, list } ) {
 		setSaveError( null );
 		try {
 			const preset = extractPresetAttrs( attributes );
-			const block = createBlock( name, preset );
+
+			// Capture the full live inner-block tree if the registry says
+			// this block has required children (e.g. kadence/advancedbtn
+			// with kadence/singlebtn children). Reading via getBlocks
+			// gives us resolved attrs from the editor, not the lossy
+			// serialized comment representation.
+			let innerBlocks;
+			if ( clientId && hasRequiredChildren( name ) ) {
+				const children = select( 'core/block-editor' )?.getBlocks?.(
+					clientId
+				);
+				if ( Array.isArray( children ) && children.length > 0 ) {
+					innerBlocks = shapeInnerBlocks( children );
+				}
+			}
+
+			const block = createBlock(
+				name,
+				preset,
+				Array.isArray( innerBlocks )
+					? buildBlocksFromTree( innerBlocks )
+					: []
+			);
 			const content = serialize( block );
 			const created = await createVariation( {
 				title: trimmed,
 				blockType: name,
 				attrs: preset,
 				content,
+				innerBlocks,
 			} );
 			setAttributes( {
 				[ BVM_ATTR_VARIATION_ID ]: created.id,
@@ -577,15 +716,26 @@ function SavePanel( { attributes, setAttributes, name, list } ) {
 	);
 }
 
-export default function VariationPanel( { attributes, setAttributes, name } ) {
+export default function VariationPanel( {
+	attributes,
+	setAttributes,
+	name,
+	clientId,
+} ) {
 	const variationId = attributes?.[ BVM_ATTR_VARIATION_ID ] || 0;
 	const { list, error } = useVariationsForBlock( name );
+
+	// Lazy-load the block-policy registry once; cheap no-op after first call.
+	useEffect( () => {
+		ensureRegistryLoaded();
+	}, [] );
 
 	return (
 		<InspectorControls>
 			<SourcePanel
 				attributes={ attributes }
 				setAttributes={ setAttributes }
+				clientId={ clientId }
 				list={ list }
 				listError={ error }
 				openInitial={ variationId > 0 }
@@ -594,6 +744,7 @@ export default function VariationPanel( { attributes, setAttributes, name } ) {
 				attributes={ attributes }
 				setAttributes={ setAttributes }
 				name={ name }
+				clientId={ clientId }
 				list={ list }
 			/>
 		</InspectorControls>

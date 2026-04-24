@@ -33,15 +33,16 @@ export async function fetchVariation( id ) {
 
 export function ensureVariationLoaded( id ) {
 	if ( ! id ) {
-		return;
+		return Promise.resolve( null );
 	}
 	if ( cache.has( id ) ) {
-		return;
+		return Promise.resolve( cache.get( id ) );
 	}
-	fetchVariation( id ).catch( () => {
+	return fetchVariation( id ).catch( () => {
 		// Variation deleted or inaccessible — remember the null so we don't retry forever.
 		cache.set( id, null );
 		notify();
+		return null;
 	} );
 }
 
@@ -88,11 +89,21 @@ export function invalidateList( blockType ) {
 	notify();
 }
 
-export async function createVariation( { title, blockType, attrs, content } ) {
+export async function createVariation( {
+	title,
+	blockType,
+	attrs,
+	content,
+	innerBlocks,
+} ) {
+	const body = { title, block_type: blockType, attrs, content };
+	if ( Array.isArray( innerBlocks ) ) {
+		body.inner_blocks = innerBlocks;
+	}
 	const data = await apiFetch( {
 		path: `/${ window.BVM?.restNamespace ?? 'bvm/v1' }/variations`,
 		method: 'POST',
-		data: { title, block_type: blockType, attrs, content },
+		data: body,
 	} );
 	cache.set( data.id, data );
 	invalidateList( blockType );
@@ -103,6 +114,7 @@ export async function updateVariation( id, payload ) {
 	const body = {};
 	if ( 'title' in payload ) body.title = payload.title;
 	if ( 'attrs' in payload ) body.attrs = payload.attrs;
+	if ( 'innerBlocks' in payload ) body.inner_blocks = payload.innerBlocks;
 	const data = await apiFetch( {
 		path: `/${ window.BVM?.restNamespace ?? 'bvm/v1' }/variations/${ id }`,
 		method: 'PUT',

@@ -113,6 +113,15 @@ class Rest {
 				'type'     => 'string',
 				'required' => false,
 			],
+			// Recursive inner block tree captured on the editor side.
+			// Shape: [ { name, attributes, innerBlocks }, ... ].
+			// Required for parent/child Kadence blocks (advancedbtn+singlebtn,
+			// accordion+pane, tabs+tab, etc.) where children carry their own
+			// meaningful attrs.
+			'inner_blocks' => [
+				'type'     => 'array',
+				'required' => false,
+			],
 		];
 	}
 
@@ -194,6 +203,16 @@ class Rest {
 		update_post_meta( $post_id, BVM_META_BLOCK_TYPE, $block_type );
 		update_post_meta( $post_id, BVM_META_ATTRS, wp_json_encode( $preset_attrs ) );
 
+		$inner_blocks = $request->get_param( 'inner_blocks' );
+		if ( is_array( $inner_blocks ) ) {
+			update_post_meta( $post_id, BVM_META_INNER_BLOCKS, wp_json_encode( self::sanitize_inner_tree( $inner_blocks ) ) );
+		}
+
+		// Tag this save as REST-sourced so the save_post handler doesn't
+		// re-parse post_content and overwrite our full attr set with the
+		// lossy default-stripped version. See CPT::sync_attrs_from_content.
+		update_post_meta( $post_id, BVM_META_ATTRS_SOURCE, 'rest' );
+
 		return self::serialize( get_post( $post_id ) );
 	}
 
@@ -224,11 +243,50 @@ class Rest {
 				$update['post_content'] = self::serialize_single_block( $effective_block_type, $attrs );
 			}
 		}
+
+		$inner_blocks = $request->get_param( 'inner_blocks' );
+		if ( is_array( $inner_blocks ) ) {
+			update_post_meta( $id, BVM_META_INNER_BLOCKS, wp_json_encode( self::sanitize_inner_tree( $inner_blocks ) ) );
+		}
+
+		if ( is_array( $attrs ) || is_array( $inner_blocks ) ) {
+			update_post_meta( $id, BVM_META_ATTRS_SOURCE, 'rest' );
+		}
+
 		if ( count( $update ) > 1 ) {
 			wp_update_post( $update );
 		}
 
 		return self::serialize( get_post( $id ) );
+	}
+
+	/**
+	 * Coerce an arbitrary client-supplied tree into the
+	 * { name, attributes, innerBlocks } shape we store. Drops anything
+	 * without a non-empty `name`.
+	 *
+	 * @param array<int,mixed> $tree
+	 * @return array<int,array{name:string,attributes:array<string,mixed>,innerBlocks:array<int,mixed>}>
+	 */
+	private static function sanitize_inner_tree( array $tree ): array {
+		$out = [];
+		foreach ( $tree as $node ) {
+			if ( ! is_array( $node ) ) {
+				continue;
+			}
+			$name = isset( $node['name'] ) && is_string( $node['name'] ) ? $node['name'] : '';
+			if ( '' === $name ) {
+				continue;
+			}
+			$attrs    = isset( $node['attributes'] ) && is_array( $node['attributes'] ) ? $node['attributes'] : [];
+			$children = isset( $node['innerBlocks'] ) && is_array( $node['innerBlocks'] ) ? $node['innerBlocks'] : [];
+			$out[]    = [
+				'name'        => $name,
+				'attributes'  => $attrs,
+				'innerBlocks' => self::sanitize_inner_tree( $children ),
+			];
+		}
+		return $out;
 	}
 
 	public static function delete_variation( \WP_REST_Request $request ) {
@@ -257,11 +315,12 @@ class Rest {
 	/** @return array<string,mixed> */
 	private static function serialize( \WP_Post $post ): array {
 		return [
-			'id'         => $post->ID,
-			'title'      => $post->post_title,
-			'block_type' => CPT::get_block_type( $post->ID ),
-			'attrs'      => CPT::get_attrs( $post->ID ) ?? [],
-			'edit_link'  => get_edit_post_link( $post->ID, 'raw' ),
+			'id'           => $post->ID,
+			'title'        => $post->post_title,
+			'block_type'   => CPT::get_block_type( $post->ID ),
+			'attrs'        => CPT::get_attrs( $post->ID ) ?? [],
+			'inner_blocks' => CPT::get_inner_blocks( $post->ID ),
+			'edit_link'    => get_edit_post_link( $post->ID, 'raw' ),
 		];
 	}
 }

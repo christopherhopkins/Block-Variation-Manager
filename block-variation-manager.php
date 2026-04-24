@@ -20,6 +20,8 @@ define( 'BVM_URL', plugin_dir_url( __FILE__ ) );
 define( 'BVM_CPT', 'bvm_variation' );
 define( 'BVM_META_ATTRS', '_bvm_variation_attrs' );
 define( 'BVM_META_BLOCK_TYPE', '_bvm_variation_block_type' );
+define( 'BVM_META_INNER_BLOCKS', '_bvm_variation_inner_blocks' );
+define( 'BVM_META_ATTRS_SOURCE', '_bvm_attrs_source' );
 
 require_once BVM_DIR . 'includes/class-migration.php';
 require_once BVM_DIR . 'includes/class-cpt.php';
@@ -28,6 +30,7 @@ require_once BVM_DIR . 'includes/class-render.php';
 require_once BVM_DIR . 'includes/class-rest.php';
 require_once BVM_DIR . 'includes/class-inserter.php';
 require_once BVM_DIR . 'includes/class-assets.php';
+require_once BVM_DIR . 'includes/class-block-registry.php';
 require_once BVM_DIR . 'includes/class-plugin.php';
 
 Plugin::init();

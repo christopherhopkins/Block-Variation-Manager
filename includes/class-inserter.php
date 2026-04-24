@@ -52,7 +52,7 @@ class Inserter {
 			$attrs['bvmVariationId']     = $post->ID;
 			$attrs['bvmOverriddenAttrs'] = [];
 
-			$result[] = [
+			$variation = [
 				'name'        => 'bvm-' . $post->ID,
 				'title'       => $post->post_title,
 				'description' => sprintf(
@@ -63,7 +63,42 @@ class Inserter {
 				'scope'       => [ 'inserter', 'transform' ],
 				'attributes'  => $attrs,
 			];
+
+			// For parent blocks with required children (kadence/accordion+pane,
+			// kadence/advancedbtn+singlebtn, etc.), restore the captured tree.
+			// Gutenberg's variation `innerBlocks` shape is recursive nested
+			// triples: [ [ name, attributes, innerBlocks[] ], ... ].
+			$inner = CPT::get_inner_blocks( $post->ID );
+			if ( ! empty( $inner ) ) {
+				$variation['innerBlocks'] = self::shape_for_inserter( $inner );
+			}
+
+			$result[] = $variation;
 		}
 		return $result;
+	}
+
+	/**
+	 * Convert the stored { name, attributes, innerBlocks } tree into the
+	 * nested-triple shape Gutenberg's block variations expect.
+	 *
+	 * @param array<int,array{name:string,attributes:array<string,mixed>,innerBlocks:array<int,mixed>}> $tree
+	 * @return array<int,array{0:string,1:array<string,mixed>,2:array<int,mixed>}>
+	 */
+	private static function shape_for_inserter( array $tree ): array {
+		$out = [];
+		foreach ( $tree as $node ) {
+			if ( empty( $node['name'] ) ) {
+				continue;
+			}
+			$attrs    = is_array( $node['attributes'] ?? null ) ? $node['attributes'] : [];
+			$children = is_array( $node['innerBlocks'] ?? null ) ? $node['innerBlocks'] : [];
+			$out[]    = [
+				$node['name'],
+				$attrs,
+				self::shape_for_inserter( $children ),
+			];
+		}
+		return $out;
 	}
 }
