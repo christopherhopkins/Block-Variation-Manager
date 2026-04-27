@@ -2,7 +2,9 @@
 	"$schema": "https://playground.wordpress.net/blueprint-schema.json",
 	"meta": {
 		"title": "Block Variation Manager — Demo",
-		"description": "Try the Block Variation Manager plugin in a disposable WordPress site, with Kadence Blocks preinstalled."
+		"description": "Try the Block Variation Manager plugin in a disposable WordPress site, with Kadence Blocks preinstalled.",
+		"author": "christopherhopkins",
+		"categories": ["Plugins"]
 	},
 	"landingPage": "/wp-admin/edit.php",
 	"preferredVersions": {

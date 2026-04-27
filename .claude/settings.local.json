@@ -3,7 +3,12 @@
     "allow": [
       "Bash(npx --yes @wordpress/scripts@latest build --webpack-src-dir=source --output-path=build)",
       "Bash(npx --yes @wordpress/scripts@latest build --config=webpack.config.cjs)",
-      "Bash(git add *)"
+      "Bash(git add *)",
+      "Bash(node -e \"const fs=require\\('fs'\\);const b=JSON.parse\\(fs.readFileSync\\('blueprint.json','utf8'\\)\\);const code=b.steps.find\\(s=>s.step==='runPHP'\\).code;fs.writeFileSync\\('bvm-seed-tmp.php',code\\);\")",
+      "Bash(php -l bvm-seed-tmp.php)",
+      "Bash(rm -f C:/Users/Hopki/Documents/Repos/NCSS/plugins/block-variation-manager/bvm-seed-tmp.php)",
+      "Bash(xxd C:/Users/Hopki/Documents/Repos/NCSS/plugins/block-variation-manager/README.md)",
+      "Bash(node -e \"JSON.parse\\(require\\('fs'\\).readFileSync\\('blueprint.json','utf8'\\)\\);console.log\\('ok'\\)\")"
     ]
   }
 }
