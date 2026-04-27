@@ -1,0 +1,49 @@
+{
+	"$schema": "https://playground.wordpress.net/blueprint-schema.json",
+	"meta": {
+		"title": "Block Variation Manager — Demo",
+		"description": "Try the Block Variation Manager plugin in a disposable WordPress site, with Kadence Blocks preinstalled."
+	},
+	"landingPage": "/wp-admin/edit.php",
+	"preferredVersions": {
+		"php": "8.2",
+		"wp": "latest"
+	},
+	"phpExtensionBundles": ["kitchen-sink"],
+	"features": {
+		"networking": true
+	},
+	"login": true,
+	"steps": [
+		{
+			"step": "installPlugin",
+			"pluginData": {
+				"resource": "wordpress.org/plugins",
+				"slug": "kadence-blocks"
+			}
+		},
+		{
+			"step": "installPlugin",
+			"pluginData": {
+				"resource": "url",
+				"url": "https://github-proxy.com/proxy/?repo=christopherhopkins/Block-Variation-Manager&branch=main"
+			}
+		},
+		{
+			"step": "setSiteOptions",
+			"options": {
+				"blogname": "Block Variation Manager Demo",
+				"blogdescription": "A disposable Playground site for trying the plugin."
+			}
+		},
+		{
+			"step": "runPHP",
+			"code": "<?php\nrequire_once '/wordpress/wp-load.php';\n\nif ( get_page_by_path( 'bvm-demo', OBJECT, 'post' ) ) { return; }\n\n$content = <<<'HTML'\n<!-- wp:heading {\"level\":1} -->\n<h1 class=\"wp-block-heading\">Block Variation Manager — Demo</h1>\n<!-- /wp:heading -->\n\n<!-- wp:paragraph -->\n<p>Select any block below, open the block sidebar, and look for the <strong>Variation</strong> panel. Save the block's attributes as a named variation, then insert that variation elsewhere — edits to the variation propagate to every instance while preserving manual overrides.</p>\n<!-- /wp:paragraph -->\n\n<!-- wp:kadence/advancedheading {\"htmlTag\":\"h2\",\"content\":\"A Kadence advanced heading\",\"colorClass\":\"theme-palette3\"} -->\n<h2 class=\"kt-adv-heading wp-block-kadence-advancedheading\">A Kadence advanced heading</h2>\n<!-- /wp:kadence/advancedheading -->\n\n<!-- wp:kadence/rowlayout {\"colLayout\":\"equal\",\"columns\":2,\"bgColor\":\"#0f172a\",\"textColor\":\"#ffffff\",\"topPadding\":40,\"bottomPadding\":40} -->\n<!-- wp:kadence/column {\"id\":1} -->\n<!-- wp:paragraph {\"textColor\":\"white\"} -->\n<p class=\"has-white-color has-text-color\">Left column inside a Kadence Row Layout with a dark background.</p>\n<!-- /wp:paragraph -->\n<!-- /wp:kadence/column -->\n\n<!-- wp:kadence/column {\"id\":2} -->\n<!-- wp:paragraph {\"textColor\":\"white\"} -->\n<p class=\"has-white-color has-text-color\">Right column. Try saving the row as a variation.</p>\n<!-- /wp:paragraph -->\n<!-- /wp:kadence/column -->\n<!-- /wp:kadence/rowlayout -->\n\n<!-- wp:kadence/accordion {\"openPane\":1,\"paneCount\":2} -->\n<!-- wp:kadence/pane {\"id\":1,\"title\":\"What is a block variation?\"} -->\n<!-- wp:paragraph -->\n<p>A reusable named preset of a block's attributes.</p>\n<!-- /wp:paragraph -->\n<!-- /wp:kadence/pane -->\n\n<!-- wp:kadence/pane {\"id\":2,\"title\":\"How do edits propagate?\"} -->\n<!-- wp:paragraph -->\n<p>Editing the variation updates every instance whose user hasn't manually overridden that attribute.</p>\n<!-- /wp:paragraph -->\n<!-- /wp:kadence/pane -->\n<!-- /wp:kadence/accordion -->\n\n<!-- wp:kadence/image {\"id\":0,\"useRatio\":true,\"ratio\":\"square\",\"maskSvg\":\"blob2\",\"maskUrl\":\"\",\"url\":\"https://picsum.photos/seed/bvm/800/800\"} -->\n<figure class=\"wp-block-kadence-image kb-image-mask-blob2\"><img src=\"https://picsum.photos/seed/bvm/800/800\" alt=\"\"/></figure>\n<!-- /wp:kadence/image -->\nHTML;\n\nwp_insert_post( [\n\t'post_title'   => 'Block Variation Manager — Demo',\n\t'post_name'    => 'bvm-demo',\n\t'post_status'  => 'publish',\n\t'post_type'    => 'post',\n\t'post_content' => $content,\n] );\n"
+		},
+		{
+			"step": "login",
+			"username": "admin",
+			"password": "password"
+		}
+	]
+}
