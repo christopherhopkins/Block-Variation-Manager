@@ -1,0 +1,41 @@
+/**
+ * Cosmetic tweaks scoped to the bvm_variation edit screen. The body class
+ * `is-bvm-variation-editor` is applied by source/admin/strip-post-chrome.js
+ * once the editor mounts.
+ *
+ * Goal: nudge the editor away from "page document" affordances toward
+ * "single-block variation" — hide preview/permalink UI that does nothing
+ * here, and tighten the title area.
+ */
+
+body.is-bvm-variation-editor {
+	// Permalink slug under the title — variations aren't publicly_queryable.
+	.editor-post-url,
+	.edit-post-post-url,
+	.editor-post-permalink,
+	.editor-post-slug {
+		display: none !important;
+	}
+
+	// Preview / View buttons in the top toolbar — no public URL to view.
+	.editor-preview-dropdown,
+	.editor-post-preview,
+	.editor-post-view-link {
+		display: none !important;
+	}
+
+	// "Add New" link on the post-edit toolbar (top header) — variations
+	// are minted from existing blocks via the inserter, not blank.
+	.editor-document-bar__post-type,
+	.editor-post-template__swap-template-button {
+		// keep the post-type breadcrumb but quiet down its emphasis;
+		// nothing to do for now — placeholder rule for future tweaks.
+	}
+
+	// Tighten the title input — no need for the full document leading.
+	.editor-post-title__input,
+	.wp-block-post-title {
+		font-size: 1.6rem;
+		font-weight: 600;
+	}
+}

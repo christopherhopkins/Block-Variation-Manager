@@ -21,12 +21,14 @@ import { dispatch, select, subscribe } from '@wordpress/data';
 import { createBlock } from '@wordpress/blocks';
 import domReady from '@wordpress/dom-ready';
 import { dispatchOrientationNotice } from './orientation.js';
+import { applyVariationEditorChrome } from './strip-post-chrome.js';
 import './usage-panel.js';
 
 const ctx = window.BVM ?? {};
 
 if ( ctx.isVariationEditor && ctx.variationBlockType ) {
 	domReady( () => {
+		applyVariationEditorChrome();
 		initVariationEditor( ctx.variationBlockType );
 		dispatchOrientationNotice( ctx.variationUsageCount || 0 );
 	} );

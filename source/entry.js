@@ -5,3 +5,4 @@ import './filters/extend-attributes.js';
 import './filters/track-overrides.js';
 import './filters/inject-panel.js';
 import './admin/variation-editor.js';
+import './admin/variation-editor.scss';

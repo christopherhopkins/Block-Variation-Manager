@@ -67,7 +67,18 @@ class Propagate {
 			return;
 		}
 		$block_name = (string) ( $source['blockName'] ?? '' );
-		if ( '' === $block_name || ! CPT::block_needs_bake( $block_name ) ) {
+		if ( '' === $block_name ) {
+			return;
+		}
+
+		$needs_bake      = CPT::block_needs_bake( $block_name );
+		$variation_inner = is_array( $source['innerBlocks'] ?? null ) ? $source['innerBlocks'] : [];
+		$has_inner       = ! empty( $variation_inner );
+
+		// Nothing to do server-side: root attrs reach the frontend via the
+		// render-time merge filter, and there's no baked HTML or inner-block
+		// template to rewrite into instance post_content.
+		if ( ! $needs_bake && ! $has_inner ) {
 			return;
 		}
 
@@ -85,7 +96,7 @@ class Propagate {
 			}
 			return;
 		}
-		$skipped         = ( 0 === $offset ) ? [] : self::read_skipped_for( $variation_id );
+		$skipped = ( 0 === $offset ) ? [] : self::read_skipped_for( $variation_id );
 
 		foreach ( $instances as $row ) {
 			$inst_id   = (int) $row['id'];
@@ -94,26 +105,32 @@ class Propagate {
 				continue;
 			}
 
-			$parsed          = parse_blocks( (string) $inst_post->post_content );
-			$changed         = false;
-			$override_attrs  = [];
-			$new_parsed      = self::walk(
+			$parsed         = parse_blocks( (string) $inst_post->post_content );
+			$changed        = false;
+			$override_attrs = [];
+			$inner_diverged = false;
+			$new_parsed     = self::walk(
 				$parsed,
 				$variation_id,
 				$block_name,
 				$source,
 				$variation_attrs,
+				$variation_inner,
+				$needs_bake,
+				$has_inner,
 				$changed,
-				$override_attrs
+				$override_attrs,
+				$inner_diverged
 			);
 
-			if ( ! empty( $override_attrs ) ) {
+			if ( ! empty( $override_attrs ) || $inner_diverged ) {
 				$skipped[] = [
-					'id'        => $inst_id,
-					'title'     => (string) $row['title'],
-					'edit_link' => (string) ( $row['edit_link'] ?? '' ),
-					'permalink' => isset( $row['permalink'] ) && is_string( $row['permalink'] ) ? $row['permalink'] : '',
-					'overrides' => array_values( array_unique( $override_attrs ) ),
+					'id'             => $inst_id,
+					'title'          => (string) $row['title'],
+					'edit_link'      => (string) ( $row['edit_link'] ?? '' ),
+					'permalink'      => isset( $row['permalink'] ) && is_string( $row['permalink'] ) ? $row['permalink'] : '',
+					'overrides'      => array_values( array_unique( $override_attrs ) ),
+					'inner_diverged' => $inner_diverged,
 				];
 			}
 
@@ -161,13 +178,26 @@ class Propagate {
 	}
 
 	/**
-	 * Walk the parsed tree, replacing variation-linked blocks that need baking
-	 * and aren't overridden. Preserves each instance's innerBlocks — variation
-	 * inner-block templates only apply at insert time, not at propagation.
+	 * Walk the parsed tree and update variation-linked blocks. Two independent
+	 * propagation paths can fire on the same matched block:
+	 *
+	 *   - Bake-splice (when $needs_bake): rewrite the instance's wrapper HTML
+	 *     using the variation's serialized innerContent prefix/suffix. Skipped
+	 *     when the instance has root-attr overrides (would clobber the
+	 *     visual effect of the override).
+	 *
+	 *   - Inner-block replace (when $has_inner): swap the instance's children
+	 *     with a fresh deep copy of the variation's inner-block tree, but
+	 *     only when the instance's children still structurally match the
+	 *     variation (same names at every depth). When they've diverged,
+	 *     leave the children alone and surface the instance via the skipped
+	 *     notice — propagating into restructured children would silently
+	 *     destroy the user's edits.
 	 *
 	 * @param array<int,array<string,mixed>> $blocks
 	 * @param array<string,mixed> $source
 	 * @param array<string,mixed> $variation_attrs
+	 * @param array<int,array<string,mixed>> $variation_inner
 	 * @return array<int,array<string,mixed>>
 	 */
 	private static function walk(
@@ -176,8 +206,12 @@ class Propagate {
 		string $block_name,
 		array $source,
 		array $variation_attrs,
+		array $variation_inner,
+		bool $needs_bake,
+		bool $has_inner,
 		bool &$changed,
-		array &$override_attrs
+		array &$override_attrs,
+		bool &$inner_diverged
 	): array {
 		$out = [];
 		foreach ( $blocks as $b ) {
@@ -193,65 +227,86 @@ class Propagate {
 					foreach ( $overrides as $k ) {
 						$override_attrs[] = $k;
 					}
+				}
+
+				// Inner-block propagation (independent of root-attr overrides:
+				// overriding bgColor at root says nothing about whether
+				// children should keep up with the variation's template).
+				$applied_inner = false;
+				if ( $has_inner ) {
+					$inst_inner = is_array( $b['innerBlocks'] ?? null ) ? $b['innerBlocks'] : [];
+					if ( self::structurally_matches( $inst_inner, $variation_inner ) ) {
+						$b['innerBlocks'] = self::clone_parsed_tree( $variation_inner );
+						$applied_inner    = true;
+						$changed          = true;
+					} else {
+						$inner_diverged = true;
+					}
+				}
+
+				// Root bake-splice. Skipped when the instance has overrides —
+				// the splice would rewrite the wrapper attrs/classes the
+				// override is meant to preserve.
+				if ( $needs_bake && empty( $overrides ) ) {
+					$source_ic = is_array( $source['innerContent'] ?? null ) ? $source['innerContent'] : [];
+					$prefix    = '';
+					$suffix    = '';
+					foreach ( $source_ic as $segment ) {
+						if ( is_string( $segment ) ) {
+							$prefix = $segment;
+							break;
+						}
+					}
+					for ( $i = count( $source_ic ) - 1; $i >= 0; $i-- ) {
+						if ( is_string( $source_ic[ $i ] ) ) {
+							$suffix = (string) $source_ic[ $i ];
+							break;
+						}
+					}
+					// Single-string innerContent → prefix only, no suffix.
+					if ( count( $source_ic ) <= 1 ) {
+						$suffix = '';
+					}
+
+					$inst_inner = is_array( $b['innerBlocks'] ?? null ) ? $b['innerBlocks'] : [];
+					$new_ic     = [];
+					if ( '' !== $prefix || empty( $inst_inner ) ) {
+						$new_ic[] = $prefix;
+					}
+					for ( $i = 0, $n = count( $inst_inner ); $i < $n; $i++ ) {
+						$new_ic[] = null;
+					}
+					if ( '' !== $suffix ) {
+						$new_ic[] = $suffix;
+					}
+
+					$new_attrs                   = $variation_attrs;
+					$new_attrs['bvmVariationId'] = $variation_id;
+					$b['attrs']                  = $new_attrs;
+					$b['innerContent']           = $new_ic;
+					$b['innerHTML']              = $prefix . $suffix;
+					$changed                     = true;
+				}
+
+				// Recurse into existing children only when we didn't replace
+				// them — newly applied inner trees come from the variation
+				// itself and are authoritative for this pass.
+				if ( ! $applied_inner ) {
 					$b['innerBlocks'] = self::walk(
 						$b['innerBlocks'] ?? [],
 						$variation_id,
 						$block_name,
 						$source,
 						$variation_attrs,
+						$variation_inner,
+						$needs_bake,
+						$has_inner,
 						$changed,
-						$override_attrs
+						$override_attrs,
+						$inner_diverged
 					);
-					$out[] = $b;
-					continue;
 				}
-
-				$new_attrs                   = $variation_attrs;
-				$new_attrs['bvmVariationId'] = $variation_id;
-				// overrides is empty here by construction; no need to carry.
-
-				// Splice: variation's wrapper strings around instance's own
-				// inner blocks. Keeps user-authored children intact while
-				// updating attr-derived wrapper markup (classes, style, etc.).
-				$source_ic = is_array( $source['innerContent'] ?? null ) ? $source['innerContent'] : [];
-				$prefix    = '';
-				$suffix    = '';
-				foreach ( $source_ic as $segment ) {
-					if ( is_string( $segment ) ) {
-						$prefix = $segment;
-						break;
-					}
-				}
-				for ( $i = count( $source_ic ) - 1; $i >= 0; $i-- ) {
-					if ( is_string( $source_ic[ $i ] ) ) {
-						$suffix = (string) $source_ic[ $i ];
-						break;
-					}
-				}
-				// If the whole innerContent is a single string, there's no
-				// separate suffix — treat the string as prefix only.
-				if ( count( $source_ic ) <= 1 ) {
-					$suffix = '';
-				}
-
-				$inst_inner = is_array( $b['innerBlocks'] ?? null ) ? $b['innerBlocks'] : [];
-				$new_ic     = [];
-				if ( '' !== $prefix || empty( $inst_inner ) ) {
-					$new_ic[] = $prefix;
-				}
-				for ( $i = 0, $n = count( $inst_inner ); $i < $n; $i++ ) {
-					$new_ic[] = null;
-				}
-				if ( '' !== $suffix ) {
-					$new_ic[] = $suffix;
-				}
-
-				$b['attrs']        = $new_attrs;
-				$b['innerContent'] = $new_ic;
-				$b['innerHTML']    = $prefix . $suffix;
-				// innerBlocks preserved as-is.
-				$changed = true;
-				$out[]   = $b;
+				$out[] = $b;
 				continue;
 			}
 
@@ -261,10 +316,60 @@ class Propagate {
 				$block_name,
 				$source,
 				$variation_attrs,
+				$variation_inner,
+				$needs_bake,
+				$has_inner,
 				$changed,
-				$override_attrs
+				$override_attrs,
+				$inner_diverged
 			);
 			$out[] = $b;
+		}
+		return $out;
+	}
+
+	/**
+	 * Same length, same blockName at every depth. Per-block attrs and
+	 * innerHTML are intentionally not compared — only structure decides
+	 * whether it's safe to replace the children.
+	 *
+	 * @param array<int,array<string,mixed>> $a
+	 * @param array<int,array<string,mixed>> $b
+	 */
+	private static function structurally_matches( array $a, array $b ): bool {
+		if ( count( $a ) !== count( $b ) ) {
+			return false;
+		}
+		foreach ( $a as $i => $node ) {
+			$a_name = (string) ( $node['blockName'] ?? '' );
+			$b_name = (string) ( $b[ $i ]['blockName'] ?? '' );
+			if ( '' === $a_name || $a_name !== $b_name ) {
+				return false;
+			}
+			$a_inner = is_array( $node['innerBlocks'] ?? null ) ? $node['innerBlocks'] : [];
+			$b_inner = is_array( $b[ $i ]['innerBlocks'] ?? null ) ? $b[ $i ]['innerBlocks'] : [];
+			if ( ! self::structurally_matches( $a_inner, $b_inner ) ) {
+				return false;
+			}
+		}
+		return true;
+	}
+
+	/**
+	 * Deep-copy a parse_blocks() tree so the caller can splice it into
+	 * another tree without aliasing.
+	 *
+	 * @param array<int,array<string,mixed>> $blocks
+	 * @return array<int,array<string,mixed>>
+	 */
+	private static function clone_parsed_tree( array $blocks ): array {
+		$out = [];
+		foreach ( $blocks as $b ) {
+			$copy                = $b;
+			$copy['innerBlocks'] = isset( $b['innerBlocks'] ) && is_array( $b['innerBlocks'] )
+				? self::clone_parsed_tree( $b['innerBlocks'] )
+				: [];
+			$out[] = $copy;
 		}
 		return $out;
 	}
@@ -366,15 +471,15 @@ class Propagate {
 			sprintf(
 				/* translators: %d: number of skipped posts */
 				_n(
-					'%d post has per-instance overrides and was not auto-updated after a variation change.',
-					'%d posts have per-instance overrides and were not auto-updated after a variation change.',
+					'%d post was not auto-updated after a variation change because it has per-instance overrides or its inner block structure has diverged from the variation.',
+					'%d posts were not auto-updated after a variation change because they have per-instance overrides or their inner block structure has diverged from the variation.',
 					$total,
 					'block-variation-manager'
 				),
 				$total
 			)
 		);
-		echo ' ' . esc_html__( 'Open each post and save to pick up the latest variation values, or clear the override on the affected attribute(s) first to accept the new value.', 'block-variation-manager' );
+		echo ' ' . esc_html__( 'Open each post and save to pick up the latest variation values, clear the override on the affected attribute(s) first, or restore the original child structure to accept the new inner blocks.', 'block-variation-manager' );
 		echo '</p>';
 
 		foreach ( $all as $variation_id => $rows ) {
@@ -448,14 +553,23 @@ class Propagate {
 					);
 				}
 
+				$inner_html = '';
+				if ( ! empty( $row['inner_diverged'] ) ) {
+					// Separator between override list and divergence note when both apply.
+					$prefix     = ( '' === $override_html ) ? ' — ' : '; ';
+					$inner_html = $prefix . esc_html__( 'inner block structure diverged', 'block-variation-manager' );
+				}
+
 				printf(
-					'<li>%s%s%s</li>',
-					// phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped -- title/edit/overrides built from escaped parts above.
+					'<li>%s%s%s%s</li>',
+					// phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped -- title/edit/overrides/inner built from escaped parts above.
 					$title_html,
 					// phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped
 					$edit_html,
 					// phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped
-					$override_html
+					$override_html,
+					// phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped
+					$inner_html
 				);
 			}
 			echo '</ul>';

@@ -89,6 +89,10 @@ class Assets {
 				'restNamespace'       => Rest::NAMESPACE,
 				'cpt'                 => BVM_CPT,
 				'adminUrl'            => admin_url( 'post.php' ),
+				'variationListUrl'    => add_query_arg(
+					[ 'post_type' => BVM_CPT ],
+					admin_url( 'edit.php' )
+				),
 				'isVariationEditor'   => (bool) $is_variation_editor,
 				'variationBlockType'  => $variation_block_type,
 				'variationUsageCount' => $variation_usage,
