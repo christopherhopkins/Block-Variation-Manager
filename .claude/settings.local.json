@@ -8,7 +8,12 @@
       "Bash(php -l bvm-seed-tmp.php)",
       "Bash(rm -f C:/Users/Hopki/Documents/Repos/NCSS/plugins/block-variation-manager/bvm-seed-tmp.php)",
       "Bash(xxd C:/Users/Hopki/Documents/Repos/NCSS/plugins/block-variation-manager/README.md)",
-      "Bash(node -e \"JSON.parse\\(require\\('fs'\\).readFileSync\\('blueprint.json','utf8'\\)\\);console.log\\('ok'\\)\")"
+      "Bash(node -e \"JSON.parse\\(require\\('fs'\\).readFileSync\\('blueprint.json','utf8'\\)\\);console.log\\('ok'\\)\")",
+      "Bash(php -l .tmp-seed.php)",
+      "Bash(node -e ' *)",
+      "Bash(rm .tmp-seed.php)",
+      "Bash(php -l .tmp-verify.php)",
+      "Bash(rm .tmp-verify.php)"
     ]
   }
 }
