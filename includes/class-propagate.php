@@ -62,12 +62,17 @@ class Propagate {
 			return;
 		}
 
-		$source = self::extract_root_block( (string) $variation->post_content );
-		if ( null === $source ) {
+		// Pull the canonical block_name from meta rather than guessing from
+		// post_content's root. Variations of child-only blocks (kadence/singlebtn,
+		// core/list-item, …) wrap their source inside a synthetic parent in
+		// post_content so the editor will render them; the wrapper's blockName
+		// is NOT the variation's source.
+		$block_name = (string) CPT::get_block_type( $variation_id );
+		if ( '' === $block_name ) {
 			return;
 		}
-		$block_name = (string) ( $source['blockName'] ?? '' );
-		if ( '' === $block_name ) {
+		$source = self::extract_source_block( (string) $variation->post_content, $block_name );
+		if ( null === $source ) {
 			return;
 		}
 
@@ -162,13 +167,34 @@ class Propagate {
 	}
 
 	/**
+	 * Find the variation's canonical source block by name, descending into
+	 * any synthetic parent wrappers introduced for editor compatibility
+	 * (see Rest::wrap_for_editing). For root-capable blocks, falls back to
+	 * the first non-empty root block when no by-name match is found — this
+	 * preserves backwards-compatibility with legacy variations whose meta
+	 * block_type may have drifted from the actual root, and is safe because
+	 * a root-capable block has no wrapper to confuse the search.
+	 *
 	 * @return array<string,mixed>|null
 	 */
-	private static function extract_root_block( string $content ): ?array {
-		if ( '' === trim( $content ) ) {
+	private static function extract_source_block( string $content, string $block_name ): ?array {
+		if ( '' === trim( $content ) || '' === $block_name ) {
 			return null;
 		}
 		$blocks = parse_blocks( $content );
+		$found  = CPT::find_block( $blocks, $block_name );
+		if ( null !== $found ) {
+			return $found;
+		}
+		// Root-capable fallback: if the variation's block_type is allowed at
+		// the root (no `parent` constraint in its block.json), the first
+		// non-empty root block IS the source. For child-only blocks
+		// (parent_of() != null), refuse to fall back — the wrapper's root
+		// is the parent, not the source, and using it would propagate
+		// against the wrong block type.
+		if ( null !== BlockRegistry::parent_of( $block_name ) ) {
+			return null;
+		}
 		foreach ( $blocks as $b ) {
 			if ( ! empty( $b['blockName'] ) ) {
 				return $b;

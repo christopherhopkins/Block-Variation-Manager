@@ -74,13 +74,18 @@ class CPT {
 			return;
 		}
 
-		// REST already wrote meta with the full attr set. The 'rest' tag is
-		// single-use — clear it so a subsequent block-editor edit on the
-		// variation post falls back to the parse-and-merge path.
-		$source = get_post_meta( $post_id, BVM_META_ATTRS_SOURCE, true );
-		if ( 'rest' === $source ) {
+		// REST already wrote meta with the full attr set, including
+		// default-equal preset attrs that parse_blocks() drops. The 'rest'
+		// tag is single-use: clear it AND continue to parse-and-merge so the
+		// user's first block-editor edit (the very edit that creates the
+		// regression "first save of a fresh variation doesn't propagate")
+		// flows into meta. The existing REST preset is layered as a baseline
+		// at the merge step below so default-equal preset attrs (kadence
+		// preset-driven blocks: infobox, accordion, etc.) survive.
+		$source             = get_post_meta( $post_id, BVM_META_ATTRS_SOURCE, true );
+		$is_rest_first_edit = ( 'rest' === $source );
+		if ( $is_rest_first_edit ) {
 			delete_post_meta( $post_id, BVM_META_ATTRS_SOURCE );
-			return;
 		}
 
 		$content = (string) $post->post_content;
@@ -89,19 +94,61 @@ class CPT {
 			delete_post_meta( $post_id, BVM_META_INNER_BLOCKS );
 			return;
 		}
-		$blocks = parse_blocks( $content );
-		$first  = null;
-		foreach ( $blocks as $b ) {
-			if ( ! empty( $b['blockName'] ) ) {
-				$first = $b;
-				break;
+		$blocks       = parse_blocks( $content );
+		$target       = (string) get_post_meta( $post_id, BVM_META_BLOCK_TYPE, true );
+		$used_target  = false;
+		$first        = null;
+
+		// When block_type is known, search the parsed tree by name. Lets
+		// child-only variations (kadence/singlebtn, core/list-item, …) live
+		// wrapped in a synthetic parent in post_content while their meta
+		// stays anchored to the real source block.
+		if ( '' !== $target ) {
+			$first = self::find_block( $blocks, $target );
+			if ( null !== $first ) {
+				$used_target = true;
+			} elseif ( null === BlockRegistry::parent_of( $target ) ) {
+				// Root-capable block_type with no by-name match — fall through
+				// to the "first non-empty root block" path. Safe because a
+				// root-capable block has no wrapper to confuse the meta. This
+				// also restores the pre-by-name-search behavior for legacy
+				// or hand-edited variations whose meta block_type has drifted.
+				$first = null;
+			} else {
+				// Child-only block_type and the wrapper is broken (user
+				// deleted the child, moved it out, etc.). Don't overwrite
+				// meta with the wrapper's attrs — preserve what we had so a
+				// save typo can't silently nuke the variation's contents.
+				return;
+			}
+		}
+
+		// Fallback: brand-new variation whose block_type meta isn't set yet,
+		// or pre-by-name-search legacy data — take the first non-empty block
+		// at the root.
+		if ( null === $first ) {
+			foreach ( $blocks as $b ) {
+				if ( ! empty( $b['blockName'] ) ) {
+					$first = $b;
+					break;
+				}
 			}
 		}
 		if ( null === $first ) {
 			return;
 		}
+
 		$parsed_attrs = is_array( $first['attrs'] ?? null ) ? $first['attrs'] : [];
 		$attrs        = self::merge_with_defaults( (string) $first['blockName'], $parsed_attrs );
+		if ( $is_rest_first_edit ) {
+			// Layer the REST-stored preset as a baseline. array_merge gives
+			// $attrs (parsed + block-type defaults) precedence — user edits
+			// win on every overlapping key — while attrs that exist ONLY in
+			// the existing meta (kadence-specific preset values that don't
+			// appear in block.json defaults) are preserved.
+			$existing = self::get_attrs( $post_id ) ?? [];
+			$attrs    = array_merge( $existing, $attrs );
+		}
 		update_post_meta( $post_id, BVM_META_ATTRS, wp_json_encode( $attrs ) );
 
 		$inner_tuples = self::blocks_to_tuples( is_array( $first['innerBlocks'] ?? null ) ? $first['innerBlocks'] : [] );
@@ -111,10 +158,45 @@ class CPT {
 			delete_post_meta( $post_id, BVM_META_INNER_BLOCKS );
 		}
 
-		$existing_block_type = get_post_meta( $post_id, BVM_META_BLOCK_TYPE, true );
-		if ( ! $existing_block_type ) {
-			update_post_meta( $post_id, BVM_META_BLOCK_TYPE, $first['blockName'] );
+		// Only auto-populate block_type when we used the fallback path.
+		// When we matched by-name, $target already equals $first['blockName']
+		// by construction, so writing it back is a no-op. Skipping the write
+		// also avoids accidentally re-asserting a stale block_type if a future
+		// caller passes a wrapper block via the fallback.
+		if ( ! $used_target ) {
+			$existing_block_type = get_post_meta( $post_id, BVM_META_BLOCK_TYPE, true );
+			if ( ! $existing_block_type ) {
+				update_post_meta( $post_id, BVM_META_BLOCK_TYPE, $first['blockName'] );
+			}
 		}
+	}
+
+	/**
+	 * Depth-first search of a parse_blocks() tree for the first block
+	 * whose blockName matches $block_name. Used by the variation save
+	 * sync to locate the canonical source block when post_content contains
+	 * a synthetic wrapper (child-only variations) rather than placing the
+	 * source at the root.
+	 *
+	 * @param array<int,array<string,mixed>> $blocks
+	 * @return array<string,mixed>|null
+	 */
+	public static function find_block( array $blocks, string $block_name ): ?array {
+		if ( '' === $block_name ) {
+			return null;
+		}
+		foreach ( $blocks as $b ) {
+			if ( ! empty( $b['blockName'] ) && $b['blockName'] === $block_name ) {
+				return $b;
+			}
+			if ( isset( $b['innerBlocks'] ) && is_array( $b['innerBlocks'] ) && ! empty( $b['innerBlocks'] ) ) {
+				$nested = self::find_block( $b['innerBlocks'], $block_name );
+				if ( null !== $nested ) {
+					return $nested;
+				}
+			}
+		}
+		return null;
 	}
 
 	/**

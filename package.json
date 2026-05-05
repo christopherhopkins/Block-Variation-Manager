@@ -6,6 +6,8 @@
 	"type": "module",
 	"scripts": {
 		"build": "webpack --config webpack.config.cjs --mode production",
-		"start": "webpack --config webpack.config.cjs --mode development --watch"
+		"start": "webpack --config webpack.config.cjs --mode development --watch",
+		"playground": "npx -y @wp-playground/cli@latest server --blueprint=./blueprint.json",
+		"playground:local": "node scripts/playground-local.mjs"
 	}
 }

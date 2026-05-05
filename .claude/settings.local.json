@@ -13,7 +13,8 @@
       "Bash(node -e ' *)",
       "Bash(rm .tmp-seed.php)",
       "Bash(php -l .tmp-verify.php)",
-      "Bash(rm .tmp-verify.php)"
+      "Bash(rm .tmp-verify.php)",
+      "Bash(node -e \"const b=JSON.parse\\(require\\('fs'\\).readFileSync\\('blueprint.json','utf8'\\)\\);console.log\\('landingPage:',b.landingPage\\);require\\('fs'\\).writeFileSync\\('.tmp-verify.php',b.steps.find\\(s=>s.step==='runPHP'\\).code\\)\")"
     ]
   }
 }

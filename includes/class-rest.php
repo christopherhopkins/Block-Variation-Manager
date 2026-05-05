@@ -184,9 +184,10 @@ class Rest {
 
 		$preset_attrs = is_array( $attrs ) ? $attrs : [];
 		$client_content = $request->get_param( 'content' );
-		$post_content   = is_string( $client_content ) && '' !== trim( $client_content )
+		$inner_content  = is_string( $client_content ) && '' !== trim( $client_content )
 			? $client_content
 			: self::serialize_single_block( $block_type, $preset_attrs );
+		$post_content   = self::wrap_for_editing( $block_type, $inner_content );
 		$post_id        = wp_insert_post(
 			[
 				'post_type'    => BVM_CPT,
@@ -240,7 +241,10 @@ class Rest {
 				? $block_type
 				: (string) CPT::get_block_type( $id );
 			if ( '' !== $effective_block_type ) {
-				$update['post_content'] = self::serialize_single_block( $effective_block_type, $attrs );
+				$update['post_content'] = self::wrap_for_editing(
+					$effective_block_type,
+					self::serialize_single_block( $effective_block_type, $attrs )
+				);
 			}
 		}
 
@@ -306,6 +310,37 @@ class Rest {
 		}
 		wp_delete_post( $id, true );
 		return [ 'deleted' => true, 'id' => $id ];
+	}
+
+	/**
+	 * Wrap serialized block content in synthetic parent block(s) when the
+	 * variation's source block has a `parent` constraint. The variation's
+	 * post_content needs to satisfy Gutenberg's parent rules so the block
+	 * editor will render it without "block not allowed here" errors. The
+	 * server's meta-extraction (`CPT::find_block`, `Propagate::extract_source_block`)
+	 * sees through the wrapper to the real source block.
+	 *
+	 * Recursive: if the parent itself is child-only (e.g. core/list-item's
+	 * parent core/list is root-capable, but in deeper hierarchies a parent
+	 * could also be constrained), keep wrapping until we hit a root-capable
+	 * ancestor, with a depth cap to guard against pathological cycles.
+	 */
+	private static function wrap_for_editing( string $block_type, string $content ): string {
+		$visited = [];
+		$current = $block_type;
+		$body    = $content;
+		// Depth cap is generous — real-world hierarchies are 1-2 deep
+		// (kadence/singlebtn → kadence/advancedbtn; core/list-item → core/list).
+		for ( $depth = 0; $depth < 8; $depth++ ) {
+			$parent = BlockRegistry::parent_of( $current );
+			if ( null === $parent || isset( $visited[ $parent ] ) ) {
+				return $body;
+			}
+			$visited[ $parent ] = true;
+			$body    = '<!-- wp:' . $parent . ' -->' . "\n" . $body . "\n" . '<!-- /wp:' . $parent . ' -->';
+			$current = $parent;
+		}
+		return $body;
 	}
 
 	/**

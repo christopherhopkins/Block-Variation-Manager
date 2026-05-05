@@ -20,8 +20,12 @@ The Playground site auto-installs Kadence Blocks alongside this plugin, logs you
 
 ```bash
 npm install
-npm run start   # dev build with watch
-npm run build   # production build
+npm run start              # dev build with watch
+npm run build              # production build
+npm run playground         # boot the blueprint locally (installs the plugin from GitHub)
+npm run playground:local   # boot the blueprint locally, mounted against this working tree
 ```
 
-The compiled assets in `build/` are committed so the plugin is installable directly from a GitHub checkout (which is how the Playground blueprint above pulls it).
+`playground` mirrors what the public Playground link does: it pulls the plugin from GitHub. Use `playground:local` while developing — it mounts the current directory at `/wp-content/plugins/block-variation-manager` so your unbuilt changes show up immediately (run `npm run start` in another terminal to keep `build/` fresh).
+
+The compiled assets in `build/` are committed so the plugin is installable directly from a GitHub checkout (which is how the Playground blueprint pulls it).

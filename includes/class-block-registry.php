@@ -71,6 +71,40 @@ class BlockRegistry {
 		return ! empty( $entry['preset_capable'] );
 	}
 
+	/**
+	 * The first declared parent of a child-only block, or null if the block
+	 * is allowed at the root. Drives the variation post_content wrapper so
+	 * the editor can render child-only blocks like kadence/singlebtn or
+	 * core/list-item without "block not allowed here" errors.
+	 *
+	 * Returns the FIRST entry in $type->parent — block.json `parent` is an
+	 * array of allowed parents. We pick a single one to keep the wrapper
+	 * deterministic; for multi-parent blocks (rare) it doesn't matter which.
+	 */
+	public static function parent_of( string $block_name ): ?string {
+		if ( ! class_exists( '\\WP_Block_Type_Registry' ) ) {
+			return null;
+		}
+		$registry = \WP_Block_Type_Registry::get_instance();
+		if ( ! $registry ) {
+			return null;
+		}
+		$type = $registry->get_registered( $block_name );
+		if ( ! $type ) {
+			return null;
+		}
+		$parents = $type->parent ?? null;
+		if ( ! is_array( $parents ) || empty( $parents ) ) {
+			return null;
+		}
+		foreach ( $parents as $candidate ) {
+			if ( is_string( $candidate ) && '' !== $candidate ) {
+				return $candidate;
+			}
+		}
+		return null;
+	}
+
 	/** @return array{required_children:array<int,string>,preset_capable:bool} */
 	private static function entry( string $block_name ): array {
 		$map = self::all();
