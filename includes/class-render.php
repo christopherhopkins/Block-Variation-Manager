@@ -42,13 +42,28 @@ class Render {
 			return $parsed_block;
 		}
 
+		// Type-mismatched link (block transform, hand-edited markup, retyped
+		// variation): merging another block type's attrs would feed foreign
+		// values into this block's render. Propagate::walk applies the same
+		// name check before touching anything.
+		$block_name = (string) ( $parsed_block['blockName'] ?? '' );
+		$target     = CPT::get_block_type( $variation_id );
+		if ( null !== $target && $block_name !== $target ) {
+			return $parsed_block;
+		}
+
 		$overridden = [];
 		if ( isset( $attrs['bvmOverriddenAttrs'] ) && is_array( $attrs['bvmOverriddenAttrs'] ) ) {
 			$overridden = array_flip( $attrs['bvmOverriddenAttrs'] );
 		}
 
+		// Excluded attrs are stripped when meta is written, but meta rows
+		// written before that rule (or by third parties) may still carry
+		// per-instance identity keys — never force those onto instances.
+		$excluded = array_flip( Attributes::excluded_attrs() );
+
 		foreach ( $variation_attrs as $key => $value ) {
-			if ( isset( $overridden[ $key ] ) ) {
+			if ( isset( $overridden[ $key ] ) || isset( $excluded[ $key ] ) ) {
 				continue;
 			}
 			$attrs[ $key ] = $value;

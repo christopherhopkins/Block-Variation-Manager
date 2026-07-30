@@ -11,6 +11,16 @@ class CPT {
 		add_action( 'save_post_' . BVM_CPT, [ self::class, 'sync_attrs_from_content' ], 10, 2 );
 		add_filter( 'manage_' . BVM_CPT . '_posts_columns', [ self::class, 'list_columns' ] );
 		add_action( 'manage_' . BVM_CPT . '_posts_custom_column', [ self::class, 'render_list_column' ], 10, 2 );
+		// The block editor's title placeholder flows through this filter
+		// (edit-form-blocks.php feeds it into the editor settings), so no
+		// DOM trickery is needed to rename it on the variation screen.
+		add_filter( 'enter_title_here', [ self::class, 'title_placeholder' ], 10, 2 );
+	}
+
+	public static function title_placeholder( string $text, \WP_Post $post ): string {
+		return BVM_CPT === $post->post_type
+			? __( 'Variation name', 'block-variation-manager' )
+			: $text;
 	}
 
 	/** @param array<string,string> $columns */
@@ -46,51 +56,34 @@ class CPT {
 	 * The meta is what the render-time merge (class-render.php) and the
 	 * editor-side variation registration (class-inserter.php) read.
 	 *
-	 * Two save paths exist:
+	 * parse_blocks() only returns comment-serialized attrs: values that equal
+	 * a CLIENT-registered default (Kadence preset attrs missing from the
+	 * server's block.json) and html-sourced attrs (heading/button text) never
+	 * appear in the comment. Rebuilding meta from a parse alone therefore
+	 * silently dropped those keys — including on Quick Edit renames. Two
+	 * mechanisms compensate:
 	 *
-	 *   1. REST (Rest::create_variation / update_variation) — supplies the
-	 *      full attribute set including default-equal values, then writes
-	 *      meta directly and tags BVM_META_ATTRS_SOURCE = 'rest'. We must
-	 *      NOT overwrite that meta here, because parse_blocks() loses any
-	 *      attr that happens to equal a block.json default. Dropping those
-	 *      breaks "apply" for preset-driven blocks (kadence/infobox etc.):
-	 *      preset-set attrs that match defaults silently disappear from the
-	 *      variation, so applying it to an existing block can't reset them.
-	 *
-	 *   2. Block editor on the variation post itself — no REST tag. We
-	 *      reconstruct attrs by parsing post_content and merging block-type
-	 *      defaults back in to undo the same parse_blocks lossiness.
+	 *   1. The existing meta is layered as a baseline on EVERY save (parsed
+	 *      values + registered defaults win on overlapping keys).
+	 *   2. The variation editor bundle refreshes the meta wholesale with the
+	 *      editor's fully-resolved attr set after each successful save (see
+	 *      source/admin/variation-editor.js), which also purges stale keys
+	 *      the baseline would otherwise carry forward.
 	 *
 	 * Also captures the root block's inner blocks as a tuple template
 	 * ([name, attrs, innerBlocks]) so the inserter can pre-populate each
-	 * instance with the variation's structure. Inner blocks are *not*
-	 * propagated at render time — only the root attrs are.
-	 *
-	 * Also auto-populates the block_type meta if the user inserted a block
-	 * but the meta hadn't been set yet.
+	 * instance with the variation's structure, and auto-populates the
+	 * block_type meta if the user inserted a block but the meta hadn't been
+	 * set yet.
 	 */
 	public static function sync_attrs_from_content( int $post_id, \WP_Post $post ): void {
 		if ( wp_is_post_revision( $post_id ) || wp_is_post_autosave( $post_id ) ) {
 			return;
 		}
 
-		// REST already wrote meta with the full attr set, including
-		// default-equal preset attrs that parse_blocks() drops. The 'rest'
-		// tag is single-use: clear it AND continue to parse-and-merge so the
-		// user's first block-editor edit (the very edit that creates the
-		// regression "first save of a fresh variation doesn't propagate")
-		// flows into meta. The existing REST preset is layered as a baseline
-		// at the merge step below so default-equal preset attrs (kadence
-		// preset-driven blocks: infobox, accordion, etc.) survive.
-		$source             = get_post_meta( $post_id, BVM_META_ATTRS_SOURCE, true );
-		$is_rest_first_edit = ( 'rest' === $source );
-		if ( $is_rest_first_edit ) {
-			delete_post_meta( $post_id, BVM_META_ATTRS_SOURCE );
-		}
-
 		$content = (string) $post->post_content;
 		if ( '' === trim( $content ) ) {
-			update_post_meta( $post_id, BVM_META_ATTRS, wp_json_encode( [] ) );
+			update_post_meta( $post_id, BVM_META_ATTRS, wp_slash( wp_json_encode( [] ) ) );
 			delete_post_meta( $post_id, BVM_META_INNER_BLOCKS );
 			return;
 		}
@@ -140,20 +133,25 @@ class CPT {
 
 		$parsed_attrs = is_array( $first['attrs'] ?? null ) ? $first['attrs'] : [];
 		$attrs        = self::merge_with_defaults( (string) $first['blockName'], $parsed_attrs );
-		if ( $is_rest_first_edit ) {
-			// Layer the REST-stored preset as a baseline. array_merge gives
-			// $attrs (parsed + block-type defaults) precedence — user edits
-			// win on every overlapping key — while attrs that exist ONLY in
-			// the existing meta (kadence-specific preset values that don't
-			// appear in block.json defaults) are preserved.
-			$existing = self::get_attrs( $post_id ) ?? [];
-			$attrs    = array_merge( $existing, $attrs );
-		}
-		update_post_meta( $post_id, BVM_META_ATTRS, wp_json_encode( $attrs ) );
+
+		// Baseline layering (see docblock): parsed + defaults win on
+		// overlapping keys; keys that exist only in the stored meta survive.
+		// Raw meta read — get_attrs() is publish-gated and this must also
+		// work while the post passes through a non-publish status.
+		$existing_raw = get_post_meta( $post_id, BVM_META_ATTRS, true );
+		$existing     = is_string( $existing_raw ) && '' !== $existing_raw
+			? json_decode( $existing_raw, true )
+			: [];
+		$existing     = is_array( $existing ) ? $existing : [];
+		$attrs        = Attributes::strip_excluded( array_merge( $existing, $attrs ) );
+		// wp_slash: update_post_meta unslashes its value, which would strip
+		// the backslashes wp_json_encode emits for quotes/unicode and corrupt
+		// the stored JSON.
+		update_post_meta( $post_id, BVM_META_ATTRS, wp_slash( wp_json_encode( $attrs ) ) );
 
 		$inner_tuples = self::blocks_to_tuples( is_array( $first['innerBlocks'] ?? null ) ? $first['innerBlocks'] : [] );
 		if ( ! empty( $inner_tuples ) ) {
-			update_post_meta( $post_id, BVM_META_INNER_BLOCKS, wp_json_encode( $inner_tuples ) );
+			update_post_meta( $post_id, BVM_META_INNER_BLOCKS, wp_slash( wp_json_encode( $inner_tuples ) ) );
 		} else {
 			delete_post_meta( $post_id, BVM_META_INNER_BLOCKS );
 		}
@@ -250,7 +248,11 @@ class CPT {
 			$attrs = is_array( $b['attrs'] ?? null ) ? $b['attrs'] : [];
 			$out[] = [
 				$name,
-				self::merge_with_defaults( $name, $attrs ),
+				// Strip bookkeeping/identity attrs: a child inside the
+				// variation may itself be linked to another variation, and
+				// keeping its bvmVariationId here would silently link every
+				// template-inserted child to that other variation.
+				Attributes::strip_excluded( self::merge_with_defaults( $name, $attrs ) ),
 				self::blocks_to_tuples( $b['innerBlocks'] ?? [] ),
 			];
 		}
@@ -359,15 +361,27 @@ class CPT {
 
 	/**
 	 * Whether a block type's static HTML needs server-side rebaking when its
-	 * variation changes. Default: core/* blocks (whose save() bakes attr
-	 * values directly into innerHTML). Libraries like Kadence don't need
-	 * this because their per-instance CSS is regenerated from attrs at
-	 * request time.
+	 * variation changes.
+	 *
+	 * Keyed on the property that actually matters — static save() vs dynamic
+	 * render — not a vendor prefix. Static blocks bake attr-derived markup
+	 * into post_content, so render_block_data merging is a no-op for them and
+	 * only a rebake propagates; dynamic blocks (anything with a
+	 * render_callback, which includes Kadence's request-time CSS pipeline and
+	 * dynamic core blocks) render from attrs on every request. Blocks
+	 * registered only client-side are treated as static — the conservative
+	 * default for third-party suites.
 	 *
 	 * Filter `bvm_block_needs_bake` to include/exclude specific blocks.
 	 */
 	public static function block_needs_bake( string $block_name ): bool {
-		$default = ( 0 === strpos( $block_name, 'core/' ) );
+		$default = true;
+		if ( class_exists( '\\WP_Block_Type_Registry' ) ) {
+			$type = \WP_Block_Type_Registry::get_instance()->get_registered( $block_name );
+			if ( $type ) {
+				$default = ! $type->is_dynamic();
+			}
+		}
 		return (bool) apply_filters( 'bvm_block_needs_bake', $default, $block_name );
 	}
 
@@ -387,11 +401,34 @@ class CPT {
 	}
 
 	/**
+	 * Shared WHERE fragment + params for "post_content references this
+	 * variation id".
+	 *
+	 * The needle is delimiter-terminated: in serialized block JSON the id is
+	 * always followed by ',' or '}', so matching the bare prefix would also
+	 * match longer ids (variation 12 hitting "bvmVariationId":123).
+	 *
+	 * @return array{0:string,1:array<int,string>} [ where_sql, params ]
+	 */
+	private static function usage_where( int $variation_id ): array {
+		global $wpdb;
+		$needle = '"bvmVariationId":' . $variation_id;
+		$where  = "post_status IN ('publish','draft','pending','future','private')
+			 AND post_type NOT IN ('revision', %s)
+			 AND (post_content LIKE %s OR post_content LIKE %s)";
+		$params = [
+			BVM_CPT,
+			'%' . $wpdb->esc_like( $needle . ',' ) . '%',
+			'%' . $wpdb->esc_like( $needle . '}' ) . '%',
+		];
+		return [ $where, $params ];
+	}
+
+	/**
 	 * List posts whose content references a given variation id.
 	 *
 	 * Admin-only — runs a LIKE against post_content. Defaults match the old
-	 * 200-row cap; the propagation job passes explicit offset/limit to page
-	 * through larger result sets.
+	 * 200-row cap.
 	 *
 	 * @return array<int,array{id:int,title:string,post_type:string,edit_link:?string,status:string}>
 	 */
@@ -400,21 +437,15 @@ class CPT {
 		if ( $variation_id <= 0 ) {
 			return [];
 		}
-		$needle = '"bvmVariationId":' . $variation_id;
-		$like   = '%' . $wpdb->esc_like( $needle ) . '%';
+		list( $where, $params ) = self::usage_where( $variation_id );
 		$limit  = max( 1, min( 500, $limit ) );
 		$offset = max( 0, $offset );
 		$sql    = $wpdb->prepare(
 			"SELECT ID, post_title, post_type, post_status FROM {$wpdb->posts}
-			 WHERE post_status IN ('publish','draft','pending','future','private')
-			 AND post_type NOT IN ('revision', %s)
-			 AND post_content LIKE %s
+			 WHERE {$where}
 			 ORDER BY post_modified DESC
 			 LIMIT %d OFFSET %d",
-			BVM_CPT,
-			$like,
-			$limit,
-			$offset
+			array_merge( $params, [ $limit, $offset ] )
 		);
 		$rows = $wpdb->get_results( $sql );
 		$out  = [];
@@ -445,16 +476,34 @@ class CPT {
 		if ( $variation_id <= 0 ) {
 			return 0;
 		}
-		$needle = '"bvmVariationId":' . $variation_id;
-		$like   = '%' . $wpdb->esc_like( $needle ) . '%';
-		$sql    = $wpdb->prepare(
-			"SELECT COUNT(*) FROM {$wpdb->posts}
-			 WHERE post_status IN ('publish','draft','pending','future','private')
-			 AND post_type NOT IN ('revision', %s)
-			 AND post_content LIKE %s",
-			BVM_CPT,
-			$like
+		list( $where, $params ) = self::usage_where( $variation_id );
+		$sql = $wpdb->prepare(
+			"SELECT COUNT(*) FROM {$wpdb->posts} WHERE {$where}",
+			$params
 		);
 		return (int) $wpdb->get_var( $sql );
+	}
+
+	/**
+	 * Keyset-paged instance IDs for the propagation job: stable under
+	 * concurrent edits, unlike OFFSET over post_modified (rows shifting
+	 * across the offset boundary between batches skipped instances).
+	 *
+	 * @return array<int,int> Post IDs > $after_id, ascending.
+	 */
+	public static function usage_post_ids( int $variation_id, int $after_id = 0, int $limit = 50 ): array {
+		global $wpdb;
+		if ( $variation_id <= 0 ) {
+			return [];
+		}
+		list( $where, $params ) = self::usage_where( $variation_id );
+		$sql = $wpdb->prepare(
+			"SELECT ID FROM {$wpdb->posts}
+			 WHERE {$where} AND ID > %d
+			 ORDER BY ID ASC
+			 LIMIT %d",
+			array_merge( $params, [ max( 0, $after_id ), max( 1, min( 500, $limit ) ) ] )
+		);
+		return array_map( 'intval', (array) $wpdb->get_col( $sql ) );
 	}
 }

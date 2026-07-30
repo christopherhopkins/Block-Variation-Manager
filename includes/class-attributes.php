@@ -35,4 +35,41 @@ class Attributes {
 
 		return $args;
 	}
+
+	/**
+	 * Attribute keys that must never be part of a variation preset: BVM
+	 * bookkeeping, per-instance identity (className, anchor, Kadence
+	 * uniqueID), and editor plumbing. Mirrors INTERNAL_ATTRS in
+	 * source/constants.js — a preset containing these would force one
+	 * instance's identity onto every other instance at render time.
+	 * Filterable so vendor adapters can add their own identity attrs.
+	 *
+	 * @return array<int,string>
+	 */
+	public static function excluded_attrs(): array {
+		$defaults = [
+			'bvmVariationId',
+			'bvmOverriddenAttrs',
+			'className',
+			'anchor',
+			'lock',
+			'metadata',
+			// Kadence per-instance identity: sharing one uniqueID across
+			// instances breaks its request-time CSS selector matching.
+			'uniqueID',
+			'uniqueId',
+		];
+		return (array) apply_filters( 'bvm_excluded_attrs', $defaults );
+	}
+
+	/**
+	 * @param array<string,mixed> $attrs
+	 * @return array<string,mixed>
+	 */
+	public static function strip_excluded( array $attrs ): array {
+		foreach ( self::excluded_attrs() as $key ) {
+			unset( $attrs[ $key ] );
+		}
+		return $attrs;
+	}
 }

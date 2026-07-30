@@ -28,8 +28,10 @@ import {
 	listForBlockType,
 	createVariation,
 	getCached,
+	getVersion,
 	ensureVariationLoaded,
 } from '../lib/variation-store.js';
+import { kadenceClassPair, pairBaseKey } from '../lib/class-pairs.js';
 import {
 	ensureRegistryLoaded,
 	hasRequiredChildren,
@@ -37,17 +39,19 @@ import {
 import {
 	BVM_ATTR_VARIATION_ID,
 	BVM_ATTR_OVERRIDES,
-	INTERNAL_ATTRS,
 } from '../constants.js';
-
-/** Sentinel cache key used to re-render on any variation-store invalidation. */
-const STORE_TICK_KEY = -1;
+import { extractPresetAttrs, shapeInnerBlocks } from '../lib/preset.js';
 
 function useVariationsForBlock( blockName ) {
 	const [ list, setList ] = useState( null );
 	const [ error, setError ] = useState( null );
 
-	useSyncExternalStore( subscribe, () => getCached( STORE_TICK_KEY ) );
+	// The store's version counter is a snapshot that actually changes on
+	// every mutation, so notify() re-renders us AND re-runs the effect —
+	// after createVariation invalidates the list cache, the effect refetches
+	// and the Apply dropdown picks up the new variation without a remount.
+	// (Cache hits resolve instantly, so unrelated ticks are cheap.)
+	const tick = useSyncExternalStore( subscribe, getVersion );
 
 	useEffect( () => {
 		let cancelled = false;
@@ -62,7 +66,7 @@ function useVariationsForBlock( blockName ) {
 		return () => {
 			cancelled = true;
 		};
-	}, [ blockName ] );
+	}, [ blockName, tick ] );
 
 	return { list, error };
 }
@@ -75,47 +79,6 @@ function useVariationSnapshot( variationId ) {
 		subscribe,
 		() => ( variationId ? getCached( variationId ) : null )
 	);
-}
-
-function extractPresetAttrs( attributes ) {
-	const out = {};
-	for ( const [ key, value ] of Object.entries( attributes ) ) {
-		if ( INTERNAL_ATTRS.has( key ) ) continue;
-		if ( value === undefined ) continue;
-		out[ key ] = value;
-	}
-	return out;
-}
-
-/**
- * Recursively shape a tree of editor block objects into the
- * { name, attributes, innerBlocks } payload the REST endpoint stores.
- * Strips BVM bookkeeping attrs and undefined values.
- */
-function shapeInnerBlocks( blocks ) {
-	if ( ! Array.isArray( blocks ) ) return [];
-	return blocks
-		.filter( ( b ) => b && typeof b.name === 'string' && b.name !== '' )
-		.map( ( b ) => ( {
-			name: b.name,
-			attributes: extractPresetAttrs( b.attributes ?? {} ),
-			innerBlocks: shapeInnerBlocks( b.innerBlocks ),
-		} ) );
-}
-
-/** Kadence class-pair convention: `fooClass` ↔ `foo`. */
-function kadenceClassPair( key ) {
-	if ( key.endsWith( 'Class' ) && key.length > 5 ) {
-		return key.slice( 0, -5 );
-	}
-	return key + 'Class';
-}
-
-/** Base key for a class-pair — strips `Class` suffix when present. */
-function pairBaseKey( key ) {
-	return key.endsWith( 'Class' ) && key.length > 5
-		? key.slice( 0, -5 )
-		: key;
 }
 
 /**
@@ -563,6 +526,12 @@ function SavePanel( { attributes, setAttributes, name, clientId, list } ) {
 		setSaveError( null );
 		try {
 			const preset = extractPresetAttrs( attributes );
+
+			// The registry cache loads lazily; a save racing the fetch (or
+			// following a failed fetch) would silently skip child capture
+			// and create a parent-block variation with no children. Await
+			// resolution — instant once cached, retried after failures.
+			await ensureRegistryLoaded();
 
 			// Capture the full live inner-block tree if the registry says
 			// this block has required children (e.g. kadence/advancedbtn

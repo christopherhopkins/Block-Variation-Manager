@@ -11,13 +11,12 @@
  *     dashboard, so the implicit "where does this back arrow go" matches
  *     where the user came from.
  *   - Adds a body class so cosmetic CSS can scope further tweaks.
- *   - Replaces the post title placeholder ("Add title") with
- *     "Variation name" via a MutationObserver — the post title input is
- *     rendered by core and its placeholder isn't filterable.
  *
- * Implemented with DOM mutation rather than SlotFill so we don't pull in
- * @wordpress/interface (a bundled-by-default WP package; importing it
- * forces a node_modules install and inflates the bundle).
+ * The post title placeholder is NOT handled here: core feeds the block
+ * editor's titlePlaceholder through PHP's `enter_title_here` filter, which
+ * CPT::title_placeholder hooks — no DOM mutation required (the old
+ * MutationObserver also could not reach the title once the editor moved it
+ * inside the canvas iframe).
  */
 
 import { __ } from '@wordpress/i18n';
@@ -47,44 +46,19 @@ export function applyVariationEditorChrome() {
 		PANELS_TO_REMOVE.forEach( ( name ) => remove( name ) );
 	}
 
-	observeTitlePlaceholder();
 	observeBackLink();
 }
 
-function observeTitlePlaceholder() {
-	const apply = () => {
-		const el = document.querySelector(
-			'.editor-post-title__input, .wp-block-post-title'
-		);
-		if ( ! el ) return false;
-		el.setAttribute(
-			'placeholder',
-			__( 'Variation name', 'block-variation-manager' )
-		);
-		el.setAttribute(
-			'aria-label',
-			__( 'Variation name', 'block-variation-manager' )
-		);
-		return true;
-	};
-
-	if ( apply() ) return;
-	// One-shot observer — disconnect as soon as we hit the title once.
-	const observer = new MutationObserver( () => {
-		if ( apply() ) observer.disconnect();
-	} );
-	observer.observe( document.body, { childList: true, subtree: true } );
-}
-
 /**
- * The top-left "W" / fullscreen-close button is rendered by core as an
- * anchor pointing at admin URL or a dispatch-driven button. Across recent
- * Gutenberg versions the selector has been any of:
+ * The top-left "W" / fullscreen-close affordance is rendered by core as an
+ * anchor in fullscreen mode; when fullscreen is off (per-user preference) it
+ * doesn't exist at all, and some builds render it as a <button>.
  *
- *   .edit-post-fullscreen-mode-close
- *   .editor-document-tools__back
- *
- * We point both at the variations list and add a tooltip label.
+ * We retarget the anchor at the variations list. Crucially the observer
+ * disconnects as soon as the element is FOUND — whatever its tag (a button
+ * will never become an anchor) — and times out entirely if it never appears,
+ * instead of running a document-wide querySelector on every DOM mutation for
+ * the rest of the session.
  */
 function observeBackLink() {
 	const url = window.BVM?.variationListUrl;
@@ -94,14 +68,14 @@ function observeBackLink() {
 		const el = document.querySelector(
 			'.edit-post-fullscreen-mode-close, .editor-document-tools__back'
 		);
-		// Some implementations render the back affordance as a <button>;
-		// only mutate when it's an anchor we can safely retarget.
-		if ( ! el || 'A' !== el.tagName ) return false;
-		el.setAttribute( 'href', url );
-		el.setAttribute(
-			'aria-label',
-			__( 'Block Variations', 'block-variation-manager' )
-		);
+		if ( ! el ) return false;
+		if ( 'A' === el.tagName ) {
+			el.setAttribute( 'href', url );
+			el.setAttribute(
+				'aria-label',
+				__( 'Block Variations', 'block-variation-manager' )
+			);
+		}
 		return true;
 	};
 
@@ -110,4 +84,5 @@ function observeBackLink() {
 		if ( apply() ) observer.disconnect();
 	} );
 	observer.observe( document.body, { childList: true, subtree: true } );
+	setTimeout( () => observer.disconnect(), 10000 );
 }

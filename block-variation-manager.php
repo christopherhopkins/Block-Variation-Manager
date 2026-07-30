@@ -21,7 +21,10 @@ define( 'BVM_CPT', 'bvm_variation' );
 define( 'BVM_META_ATTRS', '_bvm_variation_attrs' );
 define( 'BVM_META_BLOCK_TYPE', '_bvm_variation_block_type' );
 define( 'BVM_META_INNER_BLOCKS', '_bvm_variation_inner_blocks' );
-define( 'BVM_META_ATTRS_SOURCE', '_bvm_attrs_source' );
+// Serialized snapshot of the source block as last propagated — lets the cron
+// job distinguish "instance still matches the template" from "instance was
+// hand-edited" before overwriting anything. See Propagate.
+define( 'BVM_META_PROPAGATED_SOURCE', '_bvm_propagated_source' );
 
 require_once BVM_DIR . 'includes/class-migration.php';
 require_once BVM_DIR . 'includes/class-cpt.php';

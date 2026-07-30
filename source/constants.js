@@ -10,3 +10,13 @@ export const INTERNAL_ATTRS = new Set( [
 	'lock',
 	'metadata',
 ] );
+
+// Attributes that must never enter a variation preset: the bookkeeping set
+// above plus per-instance identity attrs (Kadence's uniqueID drives its
+// request-time CSS selectors — sharing one across instances breaks styling).
+// Mirrors Attributes::excluded_attrs() on the PHP side.
+export const PRESET_EXCLUDED_ATTRS = new Set( [
+	...INTERNAL_ATTRS,
+	'uniqueID',
+	'uniqueId',
+] );

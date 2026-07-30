@@ -32,7 +32,13 @@ class Assets {
 			return $settings;
 		}
 		if ( empty( $settings['template'] ) ) {
-			$settings['template'] = [ [ $block_type ] ];
+			// Child-only block types must be seeded inside their synthetic
+			// parent wrapper(s), mirroring Rest::wrap_for_editing.
+			$template = null;
+			foreach ( array_reverse( BlockRegistry::wrapper_chain( $block_type ) ) as $name ) {
+				$template = null === $template ? [ $name ] : [ $name, [], [ $template ] ];
+			}
+			$settings['template'] = [ $template ];
 		}
 		return $settings;
 	}
@@ -75,11 +81,19 @@ class Assets {
 		$screen               = function_exists( 'get_current_screen' ) ? get_current_screen() : null;
 		$is_variation_editor  = $screen && BVM_CPT === $screen->post_type;
 		$variation_block_type = '';
+		$variation_root_chain = [];
 		$variation_usage      = 0;
 		if ( $is_variation_editor && isset( $_GET['post'] ) ) {
 			$post_id              = (int) $_GET['post'];
 			$variation_block_type = (string) ( CPT::get_block_type( $post_id ) ?? '' );
 			$variation_usage      = CPT::count_usage( $post_id );
+			if ( '' !== $variation_block_type ) {
+				// Outermost-first wrapper chain; the editor-side root
+				// enforcement validates against chain[0], NOT the raw
+				// block_type — for child-only blocks the legitimate root is
+				// the synthetic parent wrapper (see Rest::wrap_for_editing).
+				$variation_root_chain = BlockRegistry::wrapper_chain( $variation_block_type );
+			}
 		}
 
 		wp_localize_script(
@@ -95,6 +109,7 @@ class Assets {
 				),
 				'isVariationEditor'   => (bool) $is_variation_editor,
 				'variationBlockType'  => $variation_block_type,
+				'variationRootChain'  => $variation_root_chain,
 				'variationUsageCount' => $variation_usage,
 			]
 		);

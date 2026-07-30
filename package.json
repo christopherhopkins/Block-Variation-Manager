@@ -9,5 +9,8 @@
 		"start": "webpack --config webpack.config.cjs --mode development --watch",
 		"playground": "npx -y @wp-playground/cli@latest server --blueprint=./blueprint.json",
 		"playground:local": "node scripts/playground-local.mjs"
+	},
+	"devDependencies": {
+		"@wordpress/scripts": "^30.0.0"
 	}
 }

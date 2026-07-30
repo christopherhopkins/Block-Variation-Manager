@@ -13,6 +13,7 @@ import {
 	INTERNAL_ATTRS,
 } from '../constants.js';
 import { deepEqual } from '../lib/equality.js';
+import { kadenceClassPair } from '../lib/class-pairs.js';
 import {
 	subscribe,
 	getCached,
@@ -66,29 +67,18 @@ function arraysEqual( a, b ) {
 	return true;
 }
 
-/**
- * Kadence (and some other WP block libs) store color-like attributes as a
- * pair: `fooColor` holds the palette slug/hex, `fooColorClass` holds the CSS
- * class. User interactions in the color picker often fire the two halves in
- * separate setAttributes calls. Without pairing, the first call marks only
- * one half as overridden — confusing for the user.
- *
- * Given an attr name, return any variation-controlled "class pair" siblings
- * that should move together with it.
- */
-function kadenceClassPair( key ) {
-	if ( key.endsWith( 'Class' ) && key.length > 5 ) {
-		return key.slice( 0, -5 );
-	}
-	return key + 'Class';
-}
+/** Stable identity for "no attrs" — a fresh {} per render would churn the
+ * wrappedSetAttributes useCallback (and thus the setAttributes prop) for
+ * every unlinked block on every render. */
+const EMPTY_ATTRS = {};
 
 const withVariationOverrides = createHigherOrderComponent( ( BlockEdit ) => {
 	return ( props ) => {
 		const { attributes, setAttributes } = props;
 		const variationId = attributes?.[ BVM_ATTR_VARIATION_ID ] || 0;
+		// undefined = record still loading; null = confirmed missing.
 		const variation = useVariation( variationId );
-		const variationAttrs = variation?.attrs ?? {};
+		const variationAttrs = variation?.attrs ?? EMPTY_ATTRS;
 		const overriddenList = useMemo(
 			() => (
 				Array.isArray( attributes?.[ BVM_ATTR_OVERRIDES ] )
@@ -99,7 +89,10 @@ const withVariationOverrides = createHigherOrderComponent( ( BlockEdit ) => {
 		);
 
 		// Keep the latest references reachable from the sync effect without
-		// making it re-run on every attribute change.
+		// making it re-run on every attribute change. overriddenRef is ALSO
+		// updated synchronously inside wrappedSetAttributes: two calls in the
+		// same tick share one render's closure, and basing the second call on
+		// the stale render-scope list would erase the first call's marks.
 		const attributesRef = useRef( attributes );
 		attributesRef.current = attributes;
 		const overriddenRef = useRef( overriddenList );
@@ -126,6 +119,33 @@ const withVariationOverrides = createHigherOrderComponent( ( BlockEdit ) => {
 					update[ key ] = value;
 				}
 			}
+			// Reconcile marks recorded conservatively while the record was
+			// loading (see wrappedSetAttributes): drop entries whose live
+			// value matches the variation after all, or that the variation
+			// doesn't define — stale marks would wrongly block server-side
+			// propagation for this instance.
+			const reconciled = Array.from( overriddenSet )
+				.filter( ( key ) => {
+					if (
+						! Object.prototype.hasOwnProperty.call(
+							variationAttrs,
+							key
+						)
+					) {
+						return false;
+					}
+					return ! deepEqual(
+						current[ key ],
+						variationAttrs[ key ]
+					);
+				} )
+				.sort();
+			if (
+				! arraysEqual( reconciled, [ ...overriddenSet ].sort() )
+			) {
+				update[ BVM_ATTR_OVERRIDES ] = reconciled;
+				overriddenRef.current = reconciled;
+			}
 			if ( Object.keys( update ).length > 0 ) {
 				setAttributesRef.current( update );
 			}
@@ -134,14 +154,25 @@ const withVariationOverrides = createHigherOrderComponent( ( BlockEdit ) => {
 
 		const wrappedSetAttributes = useCallback(
 			( next ) => {
-				if ( ! variationId || ! variation ) {
+				// null = confirmed missing — nothing to track against.
+				if ( ! variationId || variation === null ) {
 					setAttributes( next );
 					return;
 				}
 				const changed = { ...next };
-				const overrides = new Set( overriddenList );
+				const overrides = new Set( overriddenRef.current );
+				const loading = variation === undefined;
 				for ( const key of Object.keys( next ) ) {
 					if ( INTERNAL_ATTRS.has( key ) ) continue;
+					if ( loading ) {
+						// The record hasn't arrived yet, so we can't compare
+						// values. Mark conservatively — otherwise the sync
+						// effect would revert this edit the moment the fetch
+						// resolves. The effect's reconcile pass drops marks
+						// that turn out to match the variation.
+						overrides.add( key );
+						continue;
+					}
 					const hasVariationValue = Object.prototype.hasOwnProperty.call(
 						variationAttrs,
 						key
@@ -151,6 +182,30 @@ const withVariationOverrides = createHigherOrderComponent( ( BlockEdit ) => {
 					}
 					if ( deepEqual( next[ key ], variationAttrs[ key ] ) ) {
 						overrides.delete( key );
+						// Un-mark the class-pair sibling too when its live
+						// value also matches — marking added them together,
+						// so a one-half reset must not strand the other half
+						// as a permanent phantom override.
+						const pair = kadenceClassPair( key );
+						if (
+							overrides.has( pair ) &&
+							Object.prototype.hasOwnProperty.call(
+								variationAttrs,
+								pair
+							)
+						) {
+							const pairValue = Object.prototype.hasOwnProperty.call(
+								next,
+								pair
+							)
+								? next[ pair ]
+								: attributesRef.current?.[ pair ];
+							if (
+								deepEqual( pairValue, variationAttrs[ pair ] )
+							) {
+								overrides.delete( pair );
+							}
+						}
 					} else {
 						overrides.add( key );
 						// Kadence fires bgColor + bgColorClass in separate
@@ -169,12 +224,13 @@ const withVariationOverrides = createHigherOrderComponent( ( BlockEdit ) => {
 					}
 				}
 				const newOverrides = Array.from( overrides ).sort();
-				if ( ! arraysEqual( newOverrides, overriddenList ) ) {
+				if ( ! arraysEqual( newOverrides, overriddenRef.current ) ) {
 					changed[ BVM_ATTR_OVERRIDES ] = newOverrides;
+					overriddenRef.current = newOverrides;
 				}
 				setAttributes( changed );
 			},
-			[ variationId, variation, variationAttrs, overriddenList, setAttributes ]
+			[ variationId, variation, variationAttrs, setAttributes ]
 		);
 
 		return <BlockEdit { ...props } setAttributes={ wrappedSetAttributes } />;

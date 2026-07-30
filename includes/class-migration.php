@@ -32,21 +32,26 @@ class Migration {
 			return;
 		}
 		self::run();
-		update_option( self::VERSION_OPTION, self::TARGET_VERSION, false );
+		// Autoloaded: this option is read on every request's init — leaving
+		// it non-autoloaded costs one extra uncached query per request
+		// forever on sites without a persistent object cache.
+		update_option( self::VERSION_OPTION, self::TARGET_VERSION, true );
 	}
 
 	private static function run(): void {
 		global $wpdb;
 
+		$changed = 0;
+
 		// Rename CPT posts.
-		$wpdb->update(
+		$changed += (int) $wpdb->update(
 			$wpdb->posts,
 			[ 'post_type' => BVM_CPT ],
 			[ 'post_type' => 'ncss_block_variation' ]
 		);
 
 		// Rename meta keys. Only rows with the old prefix are touched.
-		$wpdb->query(
+		$changed += (int) $wpdb->query(
 			"UPDATE {$wpdb->postmeta}
 			 SET meta_key = REPLACE(meta_key, '_ncss_variation_', '_bvm_variation_')
 			 WHERE meta_key LIKE '\\_ncss\\_variation\\_%'"
@@ -56,15 +61,23 @@ class Migration {
 		// Both needles are unique enough (they're preceded by a `"` and
 		// followed by a `:` in serialized block comments) that a plain
 		// REPLACE won't hit unrelated content.
-		$wpdb->query(
+		$changed += (int) $wpdb->query(
 			"UPDATE {$wpdb->posts}
 			 SET post_content = REPLACE(post_content, 'ncssVariationId', 'bvmVariationId')
 			 WHERE post_content LIKE '%ncssVariationId%'"
 		);
-		$wpdb->query(
+		$changed += (int) $wpdb->query(
 			"UPDATE {$wpdb->posts}
 			 SET post_content = REPLACE(post_content, 'ncssOverriddenAttrs', 'bvmOverriddenAttrs')
 			 WHERE post_content LIKE '%ncssOverriddenAttrs%'"
 		);
+
+		// Raw SQL bypasses the object cache: on sites with a persistent
+		// cache, stale post/meta rows would keep serving the old names —
+		// every variation would look empty — while the version option
+		// already says the migration ran and will never retry.
+		if ( $changed > 0 ) {
+			wp_cache_flush();
+		}
 	}
 }
