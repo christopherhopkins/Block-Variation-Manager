@@ -18,6 +18,10 @@ The Playground site auto-installs Kadence Blocks alongside this plugin, logs you
 
 ## Development
 
+Full architecture, data-model, and maintenance documentation — including the
+invariants to check before changing anything that writes to the database —
+lives in [TECHNICAL.md](TECHNICAL.md).
+
 ```bash
 npm install
 npm run start              # dev build with watch
