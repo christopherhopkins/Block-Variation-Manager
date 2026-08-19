@@ -28,6 +28,15 @@
 			}
 		},
 		{
+			"step": "mkdir",
+			"path": "/wordpress/wp-content/mu-plugins"
+		},
+		{
+			"step": "writeFile",
+			"path": "/wordpress/wp-content/mu-plugins/bvm-demo-no-cache.php",
+			"data": "<?php\n/**\n * Plugin Name: BVM Demo — No Caching\n * Description: Disables caching in the disposable demo so testers always see fresh output.\n */\n\n// No-cache headers on every front-end response.\nadd_action( 'send_headers', 'nocache_headers' );\n\n// No-cache headers on REST API responses, including anonymous requests.\nadd_filter( 'rest_send_nocache_headers', '__return_true' );\n\n// Harden the default header set with no-store.\nadd_filter( 'nocache_headers', function ( $headers ) {\n\t$headers['Cache-Control'] = 'no-cache, no-store, must-revalidate, max-age=0';\n\treturn $headers;\n} );\n\n// Cache-bust enqueued styles and scripts so rebuilt assets always reload.\nfunction bvm_demo_nocache_src( $src ) {\n\treturn $src ? add_query_arg( 'nocache', (string) time(), $src ) : $src;\n}\nadd_filter( 'style_loader_src', 'bvm_demo_nocache_src' );\nadd_filter( 'script_loader_src', 'bvm_demo_nocache_src' );\n"
+		},
+		{
 			"step": "installPlugin",
 			"pluginData": {
 				"resource": "wordpress.org/plugins",
