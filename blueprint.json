@@ -22,6 +22,12 @@
 	"login": true,
 	"steps": [
 		{
+			"step": "defineWpConfigConsts",
+			"consts": {
+				"ALTERNATE_WP_CRON": true
+			}
+		},
+		{
 			"step": "installPlugin",
 			"pluginData": {
 				"resource": "wordpress.org/plugins",

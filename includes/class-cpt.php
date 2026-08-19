@@ -244,15 +244,20 @@ class CPT {
 				// Skip freeform / whitespace-only parse_blocks entries.
 				continue;
 			}
-			$name  = (string) $b['blockName'];
-			$attrs = is_array( $b['attrs'] ?? null ) ? $b['attrs'] : [];
-			$out[] = [
+			$name      = (string) $b['blockName'];
+			$attrs     = is_array( $b['attrs'] ?? null ) ? $b['attrs'] : [];
+			$linked_id = isset( $attrs['bvmVariationId'] ) ? (int) $attrs['bvmVariationId'] : 0;
+			$out[]     = [
 				$name,
-				// Strip bookkeeping/identity attrs: a child inside the
-				// variation may itself be linked to another variation, and
-				// keeping its bvmVariationId here would silently link every
-				// template-inserted child to that other variation.
-				Attributes::strip_excluded( self::merge_with_defaults( $name, $attrs ) ),
+				// Linked children are opaque to the enclosing template
+				// (§9.16): keep exactly their bvmVariationId — their own
+				// variation supplies the settings, and baking a copy here
+				// would fork it. Everything else gets the normal
+				// bookkeeping/identity strip so a template can't force one
+				// instance's identity attrs onto another.
+				$linked_id > 0
+					? [ 'bvmVariationId' => $linked_id ]
+					: Attributes::strip_excluded( self::merge_with_defaults( $name, $attrs ) ),
 				self::blocks_to_tuples( $b['innerBlocks'] ?? [] ),
 			];
 		}

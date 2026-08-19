@@ -1,4 +1,7 @@
-import { PRESET_EXCLUDED_ATTRS } from '../constants.js';
+import {
+	BVM_ATTR_VARIATION_ID,
+	PRESET_EXCLUDED_ATTRS,
+} from '../constants.js';
 
 /**
  * The attrs worth persisting as a variation preset: everything the editor has
@@ -20,14 +23,31 @@ export function extractPresetAttrs( attributes ) {
  * Recursively shape a tree of editor block objects into the
  * { name, attributes, innerBlocks } payload the REST endpoint stores.
  * Strips excluded attrs and undefined values at every depth.
+ *
+ * Linked children (§9.16): a child that is itself a variation instance is
+ * opaque to the enclosing template — capture only its link. Its settings
+ * come from its own variation at render/editor time; baking them here would
+ * fork a stale copy that fights the live values. This is the one deliberate
+ * exception to the PRESET_EXCLUDED_ATTRS strip.
  */
 export function shapeInnerBlocks( blocks ) {
 	if ( ! Array.isArray( blocks ) ) return [];
 	return blocks
 		.filter( ( b ) => b && typeof b.name === 'string' && b.name !== '' )
-		.map( ( b ) => ( {
-			name: b.name,
-			attributes: extractPresetAttrs( b.attributes ?? {} ),
-			innerBlocks: shapeInnerBlocks( b.innerBlocks ),
-		} ) );
+		.map( ( b ) => {
+			const linkedId =
+				parseInt( b.attributes?.[ BVM_ATTR_VARIATION_ID ], 10 ) || 0;
+			if ( linkedId > 0 ) {
+				return {
+					name: b.name,
+					attributes: { [ BVM_ATTR_VARIATION_ID ]: linkedId },
+					innerBlocks: shapeInnerBlocks( b.innerBlocks ),
+				};
+			}
+			return {
+				name: b.name,
+				attributes: extractPresetAttrs( b.attributes ?? {} ),
+				innerBlocks: shapeInnerBlocks( b.innerBlocks ),
+			};
+		} );
 }

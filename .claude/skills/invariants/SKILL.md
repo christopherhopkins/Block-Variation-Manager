@@ -39,7 +39,8 @@ this skill exists.
    - **§9.6** — wrapper structure comes only from
      `BlockRegistry::wrapper_chain()`; a second opinion anywhere destroys
      child-only variations.
-   - **§9.7** — excluded attrs are stripped at every meta write path.
+   - **§9.7** — excluded attrs are stripped at every meta write path (sole
+     exception: a linked child's `bvmVariationId` in templates — §9.16).
 3. In the review report or fix summary, name which invariants were checked
    and their outcome. "Checked §9.1/§9.4/§9.7 — all hold" costs one line;
    without it, nobody can tell whether the check happened at all.

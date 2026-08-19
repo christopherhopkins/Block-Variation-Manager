@@ -427,9 +427,14 @@ class Rest {
 			if ( '' === $name ) {
 				continue;
 			}
-			$out[] = [
+			$linked_id = isset( $attrs['bvmVariationId'] ) ? (int) $attrs['bvmVariationId'] : 0;
+			$out[]     = [
 				$name,
-				Attributes::strip_excluded( $attrs ),
+				// Linked children keep exactly their link (§9.16) — the one
+				// deliberate exception to the excluded-attrs strip.
+				$linked_id > 0
+					? [ 'bvmVariationId' => $linked_id ]
+					: Attributes::strip_excluded( $attrs ),
 				self::sanitize_inner_tree( $children ),
 			];
 		}

@@ -351,8 +351,12 @@ class Propagate {
 					$old_inner  = is_array( $old_source['innerBlocks'] ?? null ) ? $old_source['innerBlocks'] : [];
 					if ( self::trees_match( $inst_inner, $old_inner ) ) {
 						if ( ! self::trees_match( $inst_inner, $ctx['variation_inner'] ) ) {
-							// PHP arrays copy on assignment — no clone needed.
-							$b['innerBlocks'] = $ctx['variation_inner'];
+							// Replace from the template, but keep the
+							// instance's own node wherever the template
+							// position is a linked child (§9.16) — the
+							// template's copy is a stale capture of state
+							// the nested variation owns.
+							$b['innerBlocks'] = self::merge_template_children( $ctx['variation_inner'], $inst_inner );
 							if ( count( $ctx['variation_inner'] ) !== count( $inst_inner ) ) {
 								// Keep the parent's null slots in step with
 								// the new child count or serialize_blocks()
@@ -438,8 +442,13 @@ class Propagate {
 	 * Deep tree equality for the in-sync checks: same count and blockName at
 	 * every depth, same attrs (normalized against registered defaults so a
 	 * side whose comment omitted default-equal attrs doesn't read as an
-	 * edit; bookkeeping attrs ignored; == so key order is irrelevant), and
-	 * same trimmed innerHTML (where core child text lives).
+	 * edit; bookkeeping attrs ignored; == so key order is irrelevant), and —
+	 * for STATIC-save blocks only — same trimmed innerHTML (where core child
+	 * text lives). Dynamic blocks' markup is never compared (§9.17): it
+	 * embeds per-instance identity (Kadence bakes uniqueID into class names),
+	 * so byte-comparing it flags every template-inserted instance as diverged
+	 * forever, while their authoritative state (text included) lives in the
+	 * attrs already compared above.
 	 *
 	 * @param array<int,array<string,mixed>> $a
 	 * @param array<int,array<string,mixed>> $b
@@ -456,6 +465,20 @@ class Propagate {
 			if ( '' === $a_name || $a_name !== $b_name ) {
 				return false;
 			}
+			// Linked children are opaque (§9.16): their own variation owns
+			// attrs, markup, and subtree, so two nodes linked to the SAME
+			// variation compare equal regardless of those (the instance's
+			// values legitimately evolve with the nested variation while the
+			// template holds a capture-time copy). Different/one-sided links
+			// are a real structural divergence.
+			$a_link = isset( $node['attrs']['bvmVariationId'] ) ? (int) $node['attrs']['bvmVariationId'] : 0;
+			$b_link = isset( $b[ $i ]['attrs']['bvmVariationId'] ) ? (int) $b[ $i ]['attrs']['bvmVariationId'] : 0;
+			if ( $a_link > 0 || $b_link > 0 ) {
+				if ( $a_link !== $b_link ) {
+					return false;
+				}
+				continue;
+			}
 			$a_attrs = Attributes::strip_excluded(
 				CPT::merge_with_defaults( $a_name, is_array( $node['attrs'] ?? null ) ? $node['attrs'] : [] )
 			);
@@ -465,7 +488,10 @@ class Propagate {
 			if ( $a_attrs != $b_attrs ) {
 				return false;
 			}
-			if ( trim( (string) ( $node['innerHTML'] ?? '' ) ) !== trim( (string) ( $b[ $i ]['innerHTML'] ?? '' ) ) ) {
+			// innerHTML is authoritative only for static-save blocks (§9.17).
+			if ( CPT::block_needs_bake( $a_name )
+				&& trim( (string) ( $node['innerHTML'] ?? '' ) ) !== trim( (string) ( $b[ $i ]['innerHTML'] ?? '' ) )
+			) {
 				return false;
 			}
 			$a_inner = is_array( $node['innerBlocks'] ?? null ) ? $node['innerBlocks'] : [];
@@ -475,6 +501,50 @@ class Propagate {
 			}
 		}
 		return true;
+	}
+
+	/**
+	 * Build a replacement child list from the new template while preserving
+	 * the instance's own nodes at LINKED template positions (§9.16): where
+	 * the template node carries bvmVariationId and the instance has a node of
+	 * the same name + link at the same index, the instance's node wins — the
+	 * template's copy holds stale capture-time attrs and contents that the
+	 * nested variation (and the instance's local edits inside it) own.
+	 * Non-linked template nodes are taken from the template, recursing so
+	 * deeper linked nodes are preserved too. Output length always equals the
+	 * template's at every level, so the caller's innerContent null-slot
+	 * rebuild stays valid.
+	 *
+	 * @param array<int,array<string,mixed>> $template The variation's parsed children (authoritative).
+	 * @param array<int,array<string,mixed>> $inst     The instance's current children.
+	 * @return array<int,array<string,mixed>>
+	 */
+	private static function merge_template_children( array $template, array $inst ): array {
+		$template = array_values( $template );
+		$inst     = array_values( $inst );
+		$out      = [];
+		foreach ( $template as $i => $node ) {
+			$t_name = (string) ( $node['blockName'] ?? '' );
+			$t_link = isset( $node['attrs']['bvmVariationId'] ) ? (int) $node['attrs']['bvmVariationId'] : 0;
+			$i_node = $inst[ $i ] ?? null;
+			$i_name = is_array( $i_node ) ? (string) ( $i_node['blockName'] ?? '' ) : '';
+			$i_link = is_array( $i_node ) && isset( $i_node['attrs']['bvmVariationId'] )
+				? (int) $i_node['attrs']['bvmVariationId']
+				: 0;
+
+			if ( $t_link > 0 && null !== $i_node && $i_name === $t_name && $i_link === $t_link ) {
+				$out[] = $i_node;
+				continue;
+			}
+			if ( null !== $i_node && $i_name === $t_name ) {
+				$node['innerBlocks'] = self::merge_template_children(
+					is_array( $node['innerBlocks'] ?? null ) ? $node['innerBlocks'] : [],
+					is_array( $i_node['innerBlocks'] ?? null ) ? $i_node['innerBlocks'] : []
+				);
+			}
+			$out[] = $node;
+		}
+		return $out;
 	}
 
 	/**

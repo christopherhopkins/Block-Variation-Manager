@@ -20,6 +20,24 @@ if ( ! defined( 'ABSPATH' ) ) {
  */
 class BlockRegistry {
 
+	/**
+	 * Vendor relationships the block.json `parent` pass cannot discover:
+	 * these children do not declare a server-side `parent`, but the parent
+	 * block is meaningless without them, so variations of the parent MUST
+	 * capture them into their inner-block template. Merged into the derived
+	 * map in build() (only when the parent type is actually registered);
+	 * adjustable per block via the `bvm/block_policy` filter.
+	 *
+	 * @var array<string,array<int,string>>
+	 */
+	private const DEFAULT_REQUIRED_CHILDREN = [
+		// Kadence Row Layout: columns are its structural children (the
+		// flagship layout-preset use case), but kadence/column does not
+		// declare `parent` in its server registration, so the derived
+		// pass never links them.
+		'kadence/rowlayout' => [ 'kadence/column' ],
+	];
+
 	/** @var array<string,array{required_children:array<int,string>}>|null */
 	private static $map = null;
 
@@ -159,6 +177,22 @@ class BlockRegistry {
 				}
 				if ( ! in_array( $name, self::$map[ $parent_name ]['required_children'], true ) ) {
 					self::$map[ $parent_name ]['required_children'][] = $name;
+				}
+			}
+		}
+
+		// Seed vendor defaults the `parent` pass cannot see — skipped when
+		// the vendor plugin isn't active (parent type unregistered).
+		foreach ( self::DEFAULT_REQUIRED_CHILDREN as $parent_name => $children ) {
+			if ( ! isset( $all[ $parent_name ] ) ) {
+				continue;
+			}
+			if ( ! isset( self::$map[ $parent_name ] ) ) {
+				self::$map[ $parent_name ] = [ 'required_children' => [] ];
+			}
+			foreach ( $children as $child ) {
+				if ( ! in_array( $child, self::$map[ $parent_name ]['required_children'], true ) ) {
+					self::$map[ $parent_name ]['required_children'][] = $child;
 				}
 			}
 		}

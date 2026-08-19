@@ -71,6 +71,7 @@ rewritten). Kadence blocks are dynamic (request-time CSS from attrs); most
 | **Preset attrs** | The variation's effective attribute set (`_bvm_variation_attrs`), the values that propagate. Excludes the "excluded attrs" (below). |
 | **Excluded attrs** | Bookkeeping + per-instance identity keys that must never enter a preset: `bvmVariationId`, `bvmOverriddenAttrs`, `className`, `anchor`, `lock`, `metadata`, `uniqueID`, `uniqueId`. Mirrored in PHP (`Attributes::excluded_attrs()`, filterable) and JS (`PRESET_EXCLUDED_ATTRS` in `source/constants.js`). |
 | **Overrides** | `bvmOverriddenAttrs` on an instance: attr names the user intentionally diverged. All propagation channels skip these keys. |
+| **Linked child** | A node inside a template or instance subtree that itself carries `bvmVariationId > 0`. Opaque to the enclosing variation (§9.16): templates store only its link, propagation comparisons don't inspect it, and template replacement preserves the instance's node. |
 | **Wrapper chain** | For child-only block types (block.json `parent`), the list of synthetic ancestors needed to make the block valid at the editor root, e.g. `[core/list, core/list-item]`. Single source of truth: `BlockRegistry::wrapper_chain()`. |
 | **Bake / bake-splice** | The cron job rewriting a static block instance's wrapper HTML (`innerHTML` / `innerContent` string segments) from the variation's serialized source. |
 | **Snapshot** | `_bvm_propagated_source` meta: the serialized source block as it was **last propagated**. The in-sync test for safe overwrites. |
@@ -165,9 +166,15 @@ rendering.
 
 1. Client computes `preset = extractPresetAttrs(attributes)` (excluded attrs
    stripped) and — after **awaiting** `ensureRegistryLoaded()` — captures the
-   live child tree when the block has required children, sending both a
-   client-serialized `content` string (authoritative for static-save markup)
-   and an `inner_blocks` object tree.
+   live child tree when the block has required children (block.json-derived
+   or seeded via `DEFAULT_REQUIRED_CHILDREN`, e.g. kadence/rowlayout →
+   kadence/column), sending both a client-serialized `content` string
+   (authoritative for static-save markup) and an `inner_blocks` object tree.
+   Children that are themselves variation instances are captured as
+   link-only stubs — `{ name, attributes: { bvmVariationId } }` plus their
+   subtree — never their baked settings (§9.16). (Free-form containers
+   without required children are NOT captured — see the pending design
+   decision in §10.)
 2. Server wraps `content` in the wrapper chain (`wrap_for_editing`),
    **suppresses `CPT::sync_attrs_from_content` around `wp_insert_post`**
    (otherwise the pre-meta sync would mistake the wrapper for the source and
@@ -223,9 +230,14 @@ Per matched instance block (`blockName === block_type` AND
 2. **Inner-block replace** (when the variation has a template): replace the
    instance's children with the variation's tree **only if** the current
    children still `trees_match()` the *snapshot's* children (deep compare:
-   names, default-normalized attrs, trimmed innerHTML). Mismatch ⇒
+   names, default-normalized attrs, and — for static-save children only —
+   trimmed innerHTML, §9.17). Mismatch ⇒
    `inner_diverged`, skip. Child-count changes rebuild the parent's
-   `innerContent` null slots (`rebuild_inner_content`).
+   `innerContent` null slots (`rebuild_inner_content`). Linked children
+   (same `bvmVariationId` on both sides) compare as opaque-equal — their own
+   variation owns attrs/markup/subtree — and the replacement goes through
+   `merge_template_children`, which keeps the instance's node at linked
+   template positions instead of the template's stale copy (§9.16).
 3. **Bake-splice** (when `CPT::block_needs_bake()` — i.e. static-save — and
    the instance has no overrides): if the instance's wrapper prefix/suffix
    (`wrapper_html()`: leading/trailing string segments of `innerContent`)
@@ -308,7 +320,7 @@ root-fallback path is only taken for root-capable types.
 | `class-rest.php` | `Rest` | `bvm/v1` routes, per-object permission callbacks, create/update/delete handlers, `wrap_for_editing`, attrs-splice content updates, `serialize_single_block` (core `get_comment_delimited_block_content`), inner-tree sanitizer, response serializer. |
 | `class-inserter.php` | `Inserter` | Registers each published variation as a block-inserter variation via `get_block_type_variations`. **One query per request** (static map grouped by block type, 500 cap), flushed on variation saves. |
 | `class-assets.php` | `Assets` | Enqueues `build/entry.js`/`.css`, localizes `window.BVM` (see below), seeds the variation editor's root template from the wrapper chain. |
-| `class-block-registry.php` | `BlockRegistry` | Parent/child policy derived from the WP block registry: `parent_of`, `wrapper_chain`, `required_children` map, `/registry` REST route (filter `bvm/block_policy`, only non-empty entries returned). |
+| `class-block-registry.php` | `BlockRegistry` | Parent/child policy derived from the WP block registry: `parent_of`, `wrapper_chain`, `required_children` map (block.json `parent` pass + the `DEFAULT_REQUIRED_CHILDREN` vendor seed, e.g. kadence/rowlayout → kadence/column), `/registry` REST route (filter `bvm/block_policy`, only non-empty entries returned). |
 | `class-propagate.php` | `Propagate` | The cron engine (§4.3), snapshot read/write, safe instance writes, skipped-option storage, admin notice + dismiss handling. |
 | `class-plugin.php` | `Plugin` | `::init()` fans out to every class's `init()`. |
 
@@ -490,7 +502,9 @@ variation's root block" must call this method.
 - Excluded attrs must be stripped at **every** meta write path (sync, REST
   create/update, tuple derivation, inner-tree sanitizer) and skipped at merge
   time. A preset containing `className`/`anchor`/`uniqueID` forces one
-  instance's identity onto all instances.
+  instance's identity onto all instances. Sole deliberate exception (§9.16):
+  a linked child inside a template keeps exactly its `bvmVariationId` —
+  nothing else.
 
 ### 9.8 Matching instances
 
@@ -544,9 +558,62 @@ grep -rn "wp_schedule_single_event" includes/
 # every hit must sit inside a wp_next_scheduled( … same args … ) === false guard
 ```
 
----
+### 9.15 (retired)
 
-## 10. Known limitations
+Held "in-sync checks compare against the CURRENT source before the snapshot"
+for a fix that was reverted the same day pending the maintainer's inner-block
+design decision (§10). The number is not reused so older references stay
+unambiguous.
+
+### 9.16 Linked children are opaque to the enclosing variation
+
+A child node carrying `bvmVariationId > 0` is owned by ITS variation (and its
+own instance-local content), never by the template that contains it. Five
+call sites must agree: template capture keeps only the link — JS
+`shapeInnerBlocks`, PHP `CPT::blocks_to_tuples`, `Rest::sanitize_inner_tree`
+(the one deliberate exception to §9.7's strip rule) — `Propagate::trees_match`
+compares linked nodes by link id alone (no attrs/innerHTML/subtree), and
+`Propagate::merge_template_children` preserves the instance's node at linked
+template positions during replacement. Breaking any one site either bakes a
+stale fork of the nested variation's settings into templates (overwriting
+live values on propagation) or flags every instance containing a nested link
+as permanently diverged. Grep audit:
+
+```bash
+grep -rn "bvmVariationId" includes/class-cpt.php includes/class-rest.php includes/class-propagate.php source/lib/preset.js
+# every template capture / compare / replace site must special-case linked nodes
+```
+
+### 9.17 Never byte-compare a dynamic block's markup
+
+Dynamic blocks bake per-instance identity into their saved markup — Kadence
+embeds each block's `uniqueID` in its class names — and template-inserted
+instances legitimately carry different uniqueIDs than the variation's
+snapshot. Any in-sync check that byte-compares a dynamic block's
+innerHTML/innerContent therefore flags every such instance as diverged
+forever, and child propagation silently stops (the exact bug: a rowlayout
+variation's column alignment change never reached instances). Their
+authoritative state, text included, lives in attrs — which the comparisons
+already cover with identity attrs stripped. Markup comparison is valid only
+for static-save blocks (`CPT::block_needs_bake()` true), where innerHTML IS
+the content; `trees_match()` gates on it, and the bake-splice path only runs
+for static blocks in the first place. Keep any new comparison site behind the
+same gate.
+
+- **Parts of inner-block behavior remain pending a maintainer design
+  decision** (updated 2026-08-19 — do NOT change these without the
+  maintainer's direction on how children should function): (a) free-form
+  containers WITHOUT required children (core/group, core/columns, …) still
+  save childless variations with no option offered — kadence/rowlayout is now
+  handled via the `DEFAULT_REQUIRED_CHILDREN` seed and linked-child opacity
+  (§9.16); (b) `Propagate::walk()`'s in-sync checks compare against the
+  last-propagated snapshot only, so an instance whose children/markup already
+  match the *current* template is flagged diverged and can never converge
+  (the snapshot advances after every run); (c) the skipped-posts notice
+  suggests re-saving the post, which does not adopt a new template. A
+  reverted fix for (a)-generalized (capture checkbox), (b) (current-first
+  ordering, the retired §9.15), and (c) exists in the 2026-08-19 session
+  history.
 
 - **Programmatic edits bypass override tracking.** Attribute changes made via
   `dispatch('core/block-editor').updateBlockAttributes` (other plugins, core
@@ -624,6 +691,11 @@ curl -s -b jar.txt -H "X-WP-Nonce: $NONCE" -H "Content-Type: application/json" \
    variation's color and save → after cron (~60 s; trigger via
    `wp cron event run bvm_propagate_variation` or wait), the untouched
    instance updates, the text-edited one appears in the skipped notice.
+   **Playground cannot spawn WP-Cron's loopback request**, so the blueprint
+   defines `ALTERNATE_WP_CRON` (due events run inline on normal page visits).
+   On an instance booted without it, run due jobs by visiting
+   `/wp-cron.php?doing_wp_cron` while logged in — a cookieless hit gets
+   captured by Playground's auto-login redirect and never reaches WordPress.
 3. Save a `core/list-item` (child-only) selection as a variation, then open
    it from Tools → Block Variations → content must display wrapped in a list
    and survive a no-op save.
