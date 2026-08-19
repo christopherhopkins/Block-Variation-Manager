@@ -165,7 +165,13 @@ class Propagate {
 		self::write_skipped( $variation_id, $skipped );
 
 		if ( count( $ids ) >= self::BATCH_SIZE ) {
-			wp_schedule_single_event( time() + 30, self::HOOK, [ $variation_id, $ids[ count( $ids ) - 1 ] ] );
+			// Dedupe like schedule(): if run() executes twice with the same
+			// cursor (parallel cron runners, wp-cli alongside web cron), an
+			// unguarded schedule would pile up duplicate continuation events.
+			$args = [ $variation_id, $ids[ count( $ids ) - 1 ] ];
+			if ( false === wp_next_scheduled( self::HOOK, $args ) ) {
+				wp_schedule_single_event( time() + 30, self::HOOK, $args );
+			}
 		} else {
 			// Final batch done: what we just propagated becomes the baseline
 			// for the next run's in-sync checks.

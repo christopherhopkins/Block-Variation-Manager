@@ -213,7 +213,8 @@ The variation edit screen is the normal block editor plus
 
 `Propagate::run( $variation_id, $after_id = 0 )` on hook
 `bvm_propagate_variation`, batches of `BATCH_SIZE = 50` via keyset paging,
-continuation events scheduled +30 s with the last processed ID as cursor.
+continuation events scheduled +30 s with the last processed ID as cursor
+(deduped via `wp_next_scheduled`, same as the initial `schedule()`).
 
 Per matched instance block (`blockName === block_type` AND
 `bvmVariationId === id` — both checks required), inside `walk()`:
@@ -526,6 +527,22 @@ loading and permanent-orphan bugs.
 Whenever `innerBlocks` is replaced with a different-length array, rebuild the
 parent's `innerContent` (see `rebuild_inner_content`) or `serialize_blocks()`
 drops/duplicates children.
+
+### 9.14 Cron scheduling must dedupe with `wp_next_scheduled`
+
+Every `wp_schedule_single_event` for `bvm_propagate_variation` — the initial
+queue in `schedule()` AND the continuation in `run()` — must be guarded by
+`false === wp_next_scheduled( self::HOOK, $args )` with the exact same args.
+WP-Cron does not dedupe identical events (within 10 minutes it only dedupes
+*duplicate timestamps*), and `run()` can fire twice with the same cursor
+(parallel cron runners, wp-cli `cron event run` alongside web cron): an
+unguarded schedule then stacks duplicate continuation events, each of which
+schedules more, re-processing every batch N times. Grep audit:
+
+```bash
+grep -rn "wp_schedule_single_event" includes/
+# every hit must sit inside a wp_next_scheduled( … same args … ) === false guard
+```
 
 ---
 

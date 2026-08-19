@@ -54,7 +54,12 @@
       "Bash(curl -sL -c C:/Users/Hopki/AppData/Local/Temp/claude/C--Users-Hopki-Documents-Repos-Block-Variation-Manager/eb525924-6a9d-401c-b629-3962d2a908b1/scratchpad/pg-cookies.txt -b C:/Users/Hopki/AppData/Local/Temp/claude/C--Users-Hopki-Documents-Repos-Block-Variation-Manager/eb525924-6a9d-401c-b629-3962d2a908b1/scratchpad/pg-cookies.txt -o /dev/null --max-time 20 http://127.0.0.1:9400/)",
       "Bash(curl -s -b C:/Users/Hopki/AppData/Local/Temp/claude/C--Users-Hopki-Documents-Repos-Block-Variation-Manager/eb525924-6a9d-401c-b629-3962d2a908b1/scratchpad/pg-cookies.txt -o /tmp/idx.json -w 'namespace index: %{http_code}\\\\n' --max-time 15 http://127.0.0.1:9400/wp-json/bvm/v1)",
       "Bash(curl -s -b C:/Users/Hopki/AppData/Local/Temp/claude/C--Users-Hopki-Documents-Repos-Block-Variation-Manager/eb525924-6a9d-401c-b629-3962d2a908b1/scratchpad/pg-cookies.txt -c C:/Users/Hopki/AppData/Local/Temp/claude/C--Users-Hopki-Documents-Repos-Block-Variation-Manager/eb525924-6a9d-401c-b629-3962d2a908b1/scratchpad/pg-cookies.txt --max-time 20 http://127.0.0.1:9400/wp-admin/edit.php?post_type=bvm_variation -o /tmp/admin.html)",
-      "Bash(curl -s -b C:/Users/Hopki/AppData/Local/Temp/claude/C--Users-Hopki-Documents-Repos-Block-Variation-Manager/eb525924-6a9d-401c-b629-3962d2a908b1/scratchpad/pg-cookies.txt --max-time 20 -X PUT http://127.0.0.1:9400/wp-json/bvm/v1/variations/16 -H 'Content-Type: application/json' -H 'X-WP-Nonce: 749f42b66f' -d '{\"attrs\":{\"level\":3,\"content\":\"Updated \\\\\"again\\\\\" -- still fine\"}}')"
+      "Bash(curl -s -b C:/Users/Hopki/AppData/Local/Temp/claude/C--Users-Hopki-Documents-Repos-Block-Variation-Manager/eb525924-6a9d-401c-b629-3962d2a908b1/scratchpad/pg-cookies.txt --max-time 20 -X PUT http://127.0.0.1:9400/wp-json/bvm/v1/variations/16 -H 'Content-Type: application/json' -H 'X-WP-Nonce: 749f42b66f' -d '{\"attrs\":{\"level\":3,\"content\":\"Updated \\\\\"again\\\\\" -- still fine\"}}')",
+      "Bash(git -C .claude/worktrees/agent-a6bf58c10edccc37d diff --stat)",
+      "Bash(git -C .claude/worktrees/agent-a6bf58c10edccc37d diff)",
+      "Bash(git apply *)",
+      "Bash(php -l includes/class-propagate.php)",
+      "Bash(git worktree *)"
     ]
   }
 }
