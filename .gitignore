@@ -14,3 +14,10 @@ coverage/
 # GitHub install step (the working tree is mounted instead). Auto-cleaned
 # on script exit but listed here in case the script is killed forcibly.
 .blueprint.local.json
+# Same, for the Playwright E2E server (scripts/playground-e2e.mjs).
+.blueprint.e2e.json
+
+# Test artifacts
+.phpunit.result.cache
+test-results/
+playwright-report/

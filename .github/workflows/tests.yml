@@ -1,0 +1,123 @@
+name: Tests
+
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+    branches: [ main ]
+
+concurrency:
+  group: tests-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  php-lint:
+    name: PHP syntax (php -l)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: shivammathur/setup-php@v2
+        with:
+          php-version: '7.4'
+          coverage: none
+      - name: Lint all PHP files
+        run: |
+          set -e
+          find . -name '*.php' -not -path './node_modules/*' -not -path './vendor/*' -print0 \
+            | xargs -0 -n1 -P4 php -l > /dev/null
+          echo "All PHP files lint clean."
+
+  js:
+    name: Build + Jest (coverage gate)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: npm
+      - run: npm ci
+      - name: Production build
+        run: npm run build
+      - name: Jest with coverage thresholds (80%)
+        run: npm run test:unit -- --coverage
+        env:
+          CI: 'true'
+
+  php:
+    name: PHPUnit (PHP ${{ matrix.php }} / WP ${{ matrix.wp.label }})
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        php: [ '7.4', '8.3' ]
+        wp:
+          - { label: '6.5', core: '"WordPress/WordPress#6.5"' }
+          - { label: 'latest', core: 'null' }
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: npm
+      - run: npm ci
+      - name: Install Composer dev deps
+        run: composer install --no-interaction --no-progress
+      - name: Pin matrix combo for wp-env
+        run: |
+          cat > .wp-env.override.json <<EOF
+          {
+            "core": ${{ matrix.wp.core }},
+            "phpVersion": "${{ matrix.php }}"
+          }
+          EOF
+      - name: Start wp-env (coverage on the gate combo)
+        run: |
+          if [ "${{ matrix.php }}" = "8.3" ] && [ "${{ matrix.wp.label }}" = "latest" ]; then
+            npx wp-env start --xdebug=coverage
+          else
+            npx wp-env start
+          fi
+      - name: PHPUnit (single site)
+        run: npm run test:php
+      - name: PHPUnit (multisite)
+        run: npm run test:php:ms
+      - name: Coverage gate ≥80% lines on includes/ (gate combo only)
+        if: matrix.php == '8.3' && matrix.wp.label == 'latest'
+        run: |
+          npx wp-env run tests-cli --env-cwd=wp-content/plugins/Block-Variation-Manager \
+            bash -c "XDEBUG_MODE=coverage vendor/bin/phpunit --coverage-text" | tee coverage.txt
+          node -e "
+            const m = require('fs').readFileSync('coverage.txt','utf8').match(/Lines:\s+([\d.]+)%/);
+            if (!m) { console.error('No coverage summary found'); process.exit(1); }
+            const pct = parseFloat(m[1]);
+            console.log('includes/ line coverage: ' + pct + '%');
+            if (pct < 80) { console.error('Below the 80% gate'); process.exit(1); }
+          "
+
+  e2e:
+    name: Playwright E2E + visual regression
+    runs-on: ubuntu-latest
+    # Pinned rendering environment: visual baselines (-linux) are generated
+    # in and compared against this exact image. To (re)generate them, run
+    # tests/e2e/visual.spec.js with --update-snapshots in this image (or
+    # download the baseline-bootstrap artifact from a failed run) and commit
+    # the *-linux.png files.
+    container:
+      image: mcr.microsoft.com/playwright:v1.64.1-noble
+    steps:
+      - uses: actions/checkout@v4
+      - run: npm ci
+      - name: Run E2E suite (Playground boots via webServer)
+        run: npm run test:e2e
+        env:
+          HOME: /root
+      - name: Upload traces, diffs, and baseline actuals on failure
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: playwright-artifacts
+          path: |
+            test-results/
+            playwright-report/
+          retention-days: 7
