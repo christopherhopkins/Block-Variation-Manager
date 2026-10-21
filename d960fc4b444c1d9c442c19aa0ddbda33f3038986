@@ -1,0 +1,1 @@
+In-flight refinement to the visual task: other suites create variations, shifting the fixed row's position and alternate-row striping — the listing screenshot now uses the admin search view so the row is always first. Full local suite (probe + flow + visual, 7 tests) green in one run.
