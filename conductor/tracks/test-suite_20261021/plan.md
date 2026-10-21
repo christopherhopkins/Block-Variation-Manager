@@ -39,9 +39,10 @@ Track: `test-suite_20261021` · Spec: [spec.md](./spec.md)
 
 ## Phase 4: CI
 
-- [~] Task: GitHub Actions workflow — `php -l`, build, Jest; PHPUnit matrix PHP 7.4/8.3 × WP 6.5/latest; E2E + visual on reference combo; coverage gates
-- [ ] Task: Prove the gate — intentional break fails CI, revert, confirm green and baseline stability across two runs
-- [ ] Task: Phase Verification & Checkpoint (Refer to workflow.md)
+- [x] Task: GitHub Actions workflow — `php -l`, build, Jest; PHPUnit matrix **PHP 8.1/8.3** × WP 6.5/latest; E2E + visual in the pinned Playwright container; coverage gates `d752569`
+    - Deviation from FR7: PHP 7.4 containers are unbuildable (wp-env's image bases on Debian bullseye, whose apt archives are gone); the 7.4 floor is enforced by the `php -l` lint job running under PHP 7.4 + the composer platform pin. Recorded in tech-stack.md.
+- [x] Task: Prove the gate — red: PR #4 (intentional excluded-attrs break) failed Jest in run 39676618259, closed unmerged; green: run 39689604293 fully green on `287195c`, attempt 2 re-run also green (baseline stability across two consecutive CI runs). Linux visual baselines bootstrapped from the pinned container's artifacts.
+- [~] Task: Phase Verification & Checkpoint (Refer to workflow.md)
 
 ## Phase 5: Documentation
 

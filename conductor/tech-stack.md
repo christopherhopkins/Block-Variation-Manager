@@ -26,12 +26,11 @@
 - **WordPress Playground** (`@wp-playground/cli`) + `blueprint.json` for disposable test sites; local mount via `scripts/playground-local.mjs`
 - **Kadence Blocks** as a first-class companion plugin (auto-installed in Playground)
 
-## Testing (to be added)
+## Testing
 
-No automated test suite exists yet; adding one is part of the project.
+Added by track `test-suite_20261021` (2026-10-21):
 
-- **JS:** Jest via `@wordpress/scripts` (`test:unit`) — pure logic in `source/lib/` (equality, preset, class-pairs) is the natural first target.
-- **PHP:** PHPUnit with `wp-env` / `wp-phpunit` for `includes/` (propagation, attribute sync, REST).
-- **E2E:** Playground-driven smoke tests building on the TECHNICAL.md §12 recipes.
-
-Until the suite exists, verification is manual via Playground recipes (TECHNICAL.md §12).
+- **JS:** Jest via `@wordpress/scripts` (`npm run test:unit`), tests in `tests/js/`, webpack-external `@wordpress/*` packages stubbed in `tests/js/__mocks__/`; ≥80% coverage gates in `jest.config.cjs`.
+- **PHP:** PHPUnit inside `@wordpress/env` (`npm run test:php`, multisite via `test:php:ms`), tests in `tests/php/`, WP test library supplied by wp-env; ≥80% line coverage on `includes/` gated in CI.
+- **E2E + visual:** Playwright (`npm run test:e2e`) against a `@wp-playground/cli` server mounting the working tree (`scripts/playground-e2e.mjs`); platform-suffixed screenshot baselines in `tests/e2e/visual.spec.js-snapshots/`. *Deviation (2026-10-21):* plain `@playwright/test` instead of `@wordpress/e2e-test-utils-playwright` — the WP utils need application-password auth that Playground doesn't provide.
+- **CI:** `.github/workflows/tests.yml` — php-lint (PHP 7.4), build+Jest, PHPUnit matrix **PHP 8.1/8.3 × WP 6.5/latest**, E2E+visual in the pinned `mcr.microsoft.com/playwright` container. *Deviation (2026-10-21):* the planned PHP 7.4 matrix leg is unbuildable — wp-env's PHP 7.4 image bases on Debian bullseye, whose apt archives are gone — so runtime 7.4 compatibility rests on the `php -l` job and the composer `platform: 7.4` pin.
