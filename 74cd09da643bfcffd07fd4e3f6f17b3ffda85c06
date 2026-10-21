@@ -1,0 +1,4 @@
+Task: Multisite coverage
+Summary: MultisiteTest (@group ms-required, skipped single-site) proves per-site isolation: CPT usable on new sites, variations/attrs/usage invisible cross-site, Propagate::run touches only its own site's instances, and the skipped-notice option is site-local. npm run test:php:ms runs the suite under WP_MULTISITE=1. Also hardened RestTest's wrapper assertion to parse_blocks (multisite editors lack unfiltered_html, so filter_block_content re-serializes and strips the core/ namespace).
+Files: tests/php/MultisiteTest.php, tests/php/RestTest.php, package.json
+Why: FR6.
