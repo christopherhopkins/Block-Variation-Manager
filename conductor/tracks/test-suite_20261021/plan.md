@@ -18,12 +18,12 @@ Track: `test-suite_20261021` · Spec: [spec.md](./spec.md)
 
 ## Phase 2: PHP harness & retrofit
 
-- [~] Task: Configure `@wordpress/env` + PHPUnit (`test:php`, bootstrap loads plugin, coverage ≥80% for `includes/`)
-- [ ] Task: Seed invariant tests
-    - [ ] Write failing tests: `Attributes` excluded-attrs/preset derivation; §9.1 slashing round-trips
-    - [ ] Write failing tests: `Propagate` snapshot in-sync guards + override preservation
-    - [ ] Confirm green
-- [ ] Task: Retrofit remaining PHP classes
+- [x] Task: Configure `@wordpress/env` + PHPUnit (`test:php`, bootstrap loads plugin, coverage ≥80% for `includes/`) `583bfe3`
+- [x] Task: Seed invariant tests `ffd4b6a`
+    - [x] Write failing tests: `Attributes` excluded-attrs/preset derivation; §9.1 slashing round-trips
+    - [x] Write failing tests: `Propagate` snapshot in-sync guards + override preservation
+    - [x] Confirm green
+- [~] Task: Retrofit remaining PHP classes
     - [ ] Tests for `CPT`, `Rest` (route auth/validation), `Render` (render-time merge)
     - [ ] Tests for `Inserter`, `BlockRegistry` (wrapper chains), `Migration`, `Assets`, `Plugin`
     - [ ] Testability refactors as needed (FR8) — re-check §9 per touched file, `php -l` all touched files
