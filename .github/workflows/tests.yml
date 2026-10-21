@@ -50,7 +50,11 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        php: [ '7.4', '8.3' ]
+        # PHP 7.4 cannot run here anymore: wp-env builds its PHP image on
+        # Debian bullseye, whose archives have been removed (apt 404s). The
+        # 7.4 syntax floor is still enforced by the php-lint job, which runs
+        # php -l under PHP 7.4; composer platform is pinned to 7.4 too.
+        php: [ '8.1', '8.3' ]
         wp:
           - { label: '6.5', core: '"WordPress/WordPress#6.5"' }
           - { label: 'latest', core: 'null' }

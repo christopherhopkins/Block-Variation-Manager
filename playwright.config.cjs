@@ -4,6 +4,7 @@ const PORT = process.env.BVM_E2E_PORT || '9488';
 
 module.exports = defineConfig( {
 	testDir: './tests/e2e',
+	globalSetup: require.resolve( './tests/e2e/global-setup.cjs' ),
 	timeout: 120_000,
 	expect: {
 		timeout: 15_000,

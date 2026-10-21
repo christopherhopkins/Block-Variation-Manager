@@ -76,13 +76,15 @@ class AssetsTest extends WP_UnitTestCase {
 		}
 
 		$this->assertTrue( wp_script_is( 'bvm-editor', 'enqueued' ) );
-		// wp_localize_script casts scalars to strings: true → "1".
+		// wp_localize_script casts scalars to strings (true → "1"), and older
+		// WP versions JSON-escape forward slashes ("bvm\/v1") while newer ones
+		// don't — match both forms.
 		$data = wp_scripts()->get_data( 'bvm-editor', 'data' );
-		$this->assertStringContainsString( '"restNamespace":"bvm/v1"', $data );
+		$this->assertMatchesRegularExpression( '~"restNamespace":"bvm\\\\?/v1"~', $data );
 		$this->assertStringContainsString( '"isVariationEditor":"1"', $data );
-		$this->assertStringContainsString( '"variationBlockType":"core/list-item"', $data );
+		$this->assertMatchesRegularExpression( '~"variationBlockType":"core\\\\?/list-item"~', $data );
 		// Outermost-first wrapper chain for the client root enforcement.
-		$this->assertStringContainsString( '"variationRootChain":["core/list","core/list-item"]', $data );
+		$this->assertMatchesRegularExpression( '~"variationRootChain":\["core\\\\?/list","core\\\\?/list-item"\]~', $data );
 	}
 
 	public function test_enqueue_editor_outside_the_variation_screen(): void {
