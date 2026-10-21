@@ -2,3 +2,8 @@ Task: Phase 5 documentation
 Summary: TECHNICAL.md §11/§11.1/§12, README Development section, workflow.md Development Commands — commands, matrix, baseline-update procedure, environment caveats (wp-env DNS offline check, Playground auto-login).
 Files: TECHNICAL.md, README.md, conductor/workflow.md
 Why: FR9.
+
+Phase Verification Report — Phase 5: Documentation
+Automated: CI=true npm run test:unit green after doc edits (135 tests).
+Manual: user skimmed TECHNICAL.md §11.1 and README Development section.
+User confirmation: 'Yes, checkpoint push and finalize' (2026-10-21)
