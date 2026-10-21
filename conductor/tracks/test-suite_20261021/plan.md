@@ -46,5 +46,5 @@ Track: `test-suite_20261021` · Spec: [spec.md](./spec.md)
 
 ## Phase 5: Documentation
 
-- [~] Task: Update TECHNICAL.md §11/§12, README, and `workflow.md` Development Commands (real commands, matrix, baseline procedure)
-- [ ] Task: Phase Verification & Checkpoint (Refer to workflow.md)
+- [x] Task: Update TECHNICAL.md §11/§12, README, and `workflow.md` Development Commands (real commands, matrix, baseline procedure) `a2bfc52`
+- [~] Task: Phase Verification & Checkpoint (Refer to workflow.md)
