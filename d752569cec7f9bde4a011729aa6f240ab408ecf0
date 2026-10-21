@@ -1,0 +1,4 @@
+Task: GitHub Actions workflow
+Summary: four jobs on push/PR to main — php-lint (php -l over the tree), js (npm ci, production build, Jest with the 80% coverage thresholds), php (wp-env matrix PHP 7.4/8.3 × WP 6.5/latest via .wp-env.override.json; single-site + multisite runs on every combo; ≥80% lines on includes/ enforced on the 8.3×latest gate combo via Xdebug coverage), e2e (pinned mcr.microsoft.com/playwright:v1.64.1-noble container so visual baselines are environment-stable; artifacts incl. baseline actuals uploaded on failure).
+Files: .github/workflows/tests.yml, .gitignore (test artifacts)
+Why: FR7.
