@@ -1,0 +1,5 @@
+Task: Configure @wordpress/env + PHPUnit
+Summary: .wp-env.json (core latest, PHP 8.3, plugin mount, ports 8890/8891), composer dev deps (phpunit ^9.6 + yoast polyfills, platform php 7.4 for matrix compat), phpunit.xml.dist (tests/php, coverage over includes/), tests/php/bootstrap.php (wp-env's WP_TESTS_DIR library, plugin loaded as mu-plugin), npm scripts test:php / env:start / env:stop.
+Local env note: this machine's DNS resolver (127.0.0.1) refuses node dns.resolve, which wp-env's offline check uses — patched node_modules wordpress.js dns.resolve→dns.lookup locally (upstream wp-env issue; CI unaffected). Documented in Phase 5 docs task.
+Files: .wp-env.json, composer.json, composer.lock, phpunit.xml.dist, tests/php/bootstrap.php, package.json, package-lock.json, .gitignore
+Why: FR2 — PHP integration-test foundation.
