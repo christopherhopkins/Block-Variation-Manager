@@ -1,0 +1,5 @@
+Task: Playwright harness
+Summary: playwright.config.cjs (testDir tests/e2e, 1 worker — Playground is one shared site, TCP port readiness check because Playground's auto-login redirects stall Playwright's URL probe, screenshot tolerance 2%), scripts/playground-e2e.mjs (blueprint with the GitHub install step stripped, working tree auto-mounted, --login, fixed port 9488 via BVM_E2E_PORT), npm test:e2e, probe spec asserting logged-in wp-admin.
+Deviation from spec FR3: plain @playwright/test instead of @wordpress/e2e-test-utils-playwright — the WP utils' RequestUtils needs application-password auth that Playground doesn't provide; blocks are inserted deterministically via wp.data in page.evaluate instead.
+Files: playwright.config.cjs, scripts/playground-e2e.mjs, tests/e2e/probe.spec.js, package.json, package-lock.json
+Why: FR3 harness.
