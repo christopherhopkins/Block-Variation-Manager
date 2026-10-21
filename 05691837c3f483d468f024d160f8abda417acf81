@@ -1,0 +1,4 @@
+Task: Configure Jest via @wordpress/scripts
+Summary: Added jest.config.cjs extending the @wordpress/scripts jest-unit preset (testMatch tests/js/**/*.test.js, coverage from source/ excluding entry.js, 80% global thresholds) and an npm script test:unit. Smoke test proves ESM imports from source/ transform and run.
+Files: jest.config.cjs (new), package.json (test:unit script), tests/js/harness.test.js (new)
+Why: Foundation for TDD workflow — all future JS work gets red/green cycles and coverage gates.
