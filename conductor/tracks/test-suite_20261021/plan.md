@@ -30,16 +30,16 @@ Track: `test-suite_20261021` · Spec: [spec.md](./spec.md)
 - [x] Task: Multisite coverage — `test:php:ms` (WP_MULTISITE=1), MultisiteTest isolation suite `74cd09d`
 - [x] Task: Phase Verification & Checkpoint (Refer to workflow.md) — user confirmed 2026-10-21
 
-## Phase 3: E2E & visual regression
+## Phase 3: E2E & visual regression [checkpoint: d960fc4]
 
 - [x] Task: Playwright harness (`test:e2e`) against `@wp-playground/cli` mounting the working tree `c50ace7` (deviation: plain @playwright/test, see git note)
 - [x] Task: Core-flow E2E — save variation → apply → assert `bvmVariationId` + Tools listing `749a295`
 - [x] Task: Visual regression — baselines for variation panel, Tools list, propagated front-end render `d5e3930` (win32 committed; linux baselines bootstrap from the pinned CI container during the Phase 4 proof — see git note)
-- [~] Task: Phase Verification & Checkpoint (Refer to workflow.md)
+- [x] Task: Phase Verification & Checkpoint (Refer to workflow.md) — user confirmed 2026-10-21
 
 ## Phase 4: CI
 
-- [ ] Task: GitHub Actions workflow — `php -l`, build, Jest; PHPUnit matrix PHP 7.4/8.3 × WP 6.5/latest; E2E + visual on reference combo; coverage gates
+- [~] Task: GitHub Actions workflow — `php -l`, build, Jest; PHPUnit matrix PHP 7.4/8.3 × WP 6.5/latest; E2E + visual on reference combo; coverage gates
 - [ ] Task: Prove the gate — intentional break fails CI, revert, confirm green and baseline stability across two runs
 - [ ] Task: Phase Verification & Checkpoint (Refer to workflow.md)
 
