@@ -28,7 +28,15 @@ npm run start              # dev build with watch
 npm run build              # production build
 npm run playground         # boot the blueprint locally (installs the plugin from GitHub)
 npm run playground:local   # boot the blueprint locally, mounted against this working tree
+npm run test:unit          # Jest unit tests (source/)
+npm run test:php           # PHPUnit in wp-env (requires Docker; npm run env:start first)
+npm run test:php:ms        # the same suite as multisite
+npm run test:e2e           # Playwright E2E + visual regression against Playground
 ```
+
+CI (GitHub Actions) runs all suites on every push/PR to `main`, including a
+PHP 8.1/8.3 × WordPress 6.5/latest matrix and committed visual-regression
+baselines — see `.github/workflows/tests.yml` and TECHNICAL.md §11.1.
 
 `playground` mirrors what the public Playground link does: it pulls the plugin from GitHub. Use `playground:local` while developing — it mounts the current directory at `/wp-content/plugins/block-variation-manager` so your unbuilt changes show up immediately (run `npm run start` in another terminal to keep `build/` fresh).
 

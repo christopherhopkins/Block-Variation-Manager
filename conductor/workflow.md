@@ -235,32 +235,37 @@ Before marking any task complete, verify:
 
 ## Development Commands
 
-**AI AGENT INSTRUCTION: This section should be adapted to the project's specific
-language, framework, and build tools.**
-
 ### Setup
 
 ```bash
-# Example: Commands to set up the development environment (e.g., install dependencies, configure database)
-# e.g., for a Node.js project: npm install
-# e.g., for a Go project: go mod tidy
+npm install                # JS toolchain + test tooling
+composer install           # PHPUnit + polyfills (dev only)
+npm run env:start          # wp-env (Docker) for the PHP suite — ports 8890/8891
 ```
 
 ### Daily Development
 
 ```bash
-# Example: Commands for common daily tasks (e.g., start dev server, run tests, lint, format)
-# e.g., for a Node.js project: npm run dev, npm test, npm run lint
-# e.g., for a Go project: go run main.go, go test ./..., go fmt ./...
+npm run start              # webpack watch (keep build/ fresh)
+npm run playground:local   # disposable WP with the working tree mounted
+npm run test:unit          # Jest (tests/js/) — fast, no Docker
+npm run test:php           # PHPUnit in wp-env (tests/php/)
+npm run test:php:ms        # the same suite under multisite
+npm run test:e2e           # Playwright E2E + visual vs Playground (port 9488)
 ```
 
 ### Before Committing
 
 ```bash
-# Example: Commands to run all pre-commit checks (e.g., format, lint, type check, run tests)
-# e.g., for a Node.js project: npm run check
-# e.g., for a Go project: make check (if a Makefile exists)
+npm run build              # JS changed? rebuild and COMMIT build/ (CLAUDE.md)
+php -l <touched>.php       # PHP has no build step — lint touched files
+CI=true npm run test:unit  # single-run Jest
+npm run test:php           # with Docker up
 ```
+
+Coverage gates: Jest thresholds (80%) live in `jest.config.cjs`; the PHP
+80%-line gate on `includes/` is enforced in CI (`.github/workflows/tests.yml`).
+Visual-baseline regeneration procedure: TECHNICAL.md §11.1.
 
 ## Testing Requirements
 

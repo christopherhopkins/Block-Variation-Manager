@@ -715,11 +715,18 @@ hook, and `Render::apply_variation` must keep tolerating non-array input
 ## 11. Build & development workflow
 
 ```bash
-npm install                # @wordpress/scripts (webpack, babel, sass)
+npm install                # @wordpress/scripts (webpack, babel, sass) + test tooling
 npm run start              # dev build, watch mode
 npm run build              # production build → build/ (COMMITTED — rebuild before committing JS changes)
 npm run playground         # disposable WP via wp-playground CLI, plugin pulled from GitHub (blueprint.json)
 npm run playground:local   # same, but the working tree is mounted (use with `npm run start`)
+
+# Tests (see also .github/workflows/tests.yml, which runs all of these)
+npm run test:unit          # Jest (tests/js/) — 80% coverage thresholds in jest.config.cjs
+npm run env:start          # wp-env (Docker) on ports 8890/8891 — needed for test:php
+npm run test:php           # PHPUnit inside wp-env (tests/php/)
+npm run test:php:ms        # same suite under WP_MULTISITE=1
+npm run test:e2e           # Playwright + visual regression vs Playground on port 9488
 ```
 
 - `build/` is committed deliberately so the plugin installs straight from a
@@ -731,6 +738,40 @@ npm run playground:local   # same, but the working tree is mounted (use with `np
 - PHP has no build step; syntax-check with `php -l includes/*.php`.
 - `scripts/playground-local.mjs` strips the blueprint's GitHub install step
   and relies on `--auto-mount`; it writes/cleans `.blueprint.local.json`.
+  `scripts/playground-e2e.mjs` is the same for the Playwright suite (fixed
+  port `BVM_E2E_PORT`, default 9488, `--login`).
+
+### 11.1 Test suites
+
+- **Jest** (`tests/js/`): the `@wordpress/*` packages the bundle treats as
+  webpack externals aren't installed, so `jest.config.cjs` maps them to
+  stubs in `tests/js/__mocks__/`. Module-level caches (variation-store,
+  block-registry) are tested via `jest.isolateModules`.
+- **PHPUnit** (`tests/php/`): runs inside wp-env's tests container; the WP
+  test library comes from the container's `WP_TESTS_DIR`. Requires Docker.
+  If wp-env claims the network is unavailable although you're online, your
+  resolver (e.g. 127.0.0.1 DNS proxies) refuses node's `dns.resolve`, which
+  wp-env's offline check uses — patch `node_modules/@wordpress/env/lib/wordpress.js`
+  to `dns.lookup` locally (upstream bug; re-apply after `npm install`; CI
+  unaffected).
+- **Playwright** (`tests/e2e/`): boots Playground via the config's
+  `webServer`. `global-setup.cjs` waits out the boot page and logs in
+  explicitly (Playground's auto-login is one-shot and flaky), saving
+  `storageState` for every test. Blocks are inserted via `wp.data` in
+  `page.evaluate` for determinism.
+- **Visual baselines** (`tests/e2e/visual.spec.js-snapshots/`): committed and
+  platform-suffixed. `-win32` baselines regenerate locally with
+  `npx playwright test tests/e2e/visual.spec.js --update-snapshots`; `-linux`
+  baselines must come from the pinned CI container (delete the stale PNG,
+  push, download the failed run's `playwright-artifacts`, commit the actual
+  from `tests/e2e/visual.spec.js-snapshots/`). Dynamic regions (dates) are
+  masked; row-actions are hidden (their height depends on hover detection).
+- **CI** (`.github/workflows/tests.yml`): php-lint under PHP 7.4, build +
+  Jest, PHPUnit matrix PHP 8.1/8.3 × WP 6.5/latest (single + multisite,
+  80%-line coverage gate on 8.3×latest), E2E + visual in the pinned
+  `mcr.microsoft.com/playwright` image. PHP 7.4 can't run in wp-env anymore
+  (its Debian bullseye base image no longer apt-installs); the 7.4 floor is
+  held by the lint job and composer's `platform: 7.4` pin.
 
 ---
 
@@ -756,7 +797,13 @@ curl -s -b jar.txt -H "X-WP-Nonce: $NONCE" -H "Content-Type: application/json" \
 # re-fetch: attrs.content must equal the input exactly; className must be absent
 ```
 
-**Manual editor checks** (the ones automated tests don't cover):
+**Automated-first:** most of what this section used to cover by hand is now
+automated — run `npm run test:unit`, `npm run test:php` (+ `:ms`) and
+`npm run test:e2e` before reaching for the recipes below. The REST
+round-trip, capability gates, child-only wrapping, override preservation and
+propagation guards all have tests (see §11.1).
+
+**Manual editor checks** (the ones automated tests still don't cover):
 
 1. Save a styled block as a variation → the Apply dropdown shows it
    immediately (no remount needed) and the block reads as linked.
