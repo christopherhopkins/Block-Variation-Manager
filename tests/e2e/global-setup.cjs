@@ -39,17 +39,51 @@ module.exports = async ( config ) => {
 		await new Promise( ( r ) => setTimeout( r, 5000 ) );
 	}
 
-	// 2. Explicit login → storage state.
+	// 2. Explicit login → storage state, VERIFIED: the state is only saved
+	// once /wp-admin/ actually renders the admin bar with it. Playground's
+	// session handling flakes right after boot, so retry the whole cycle.
 	const browser = await chromium.launch();
 	const page = await browser.newPage( { baseURL: base } );
-	await page.goto( '/wp-login.php', { timeout: 120_000 } );
-	if ( page.url().includes( 'wp-login.php' ) ) {
-		await page.fill( '#user_login', 'admin' );
-		await page.fill( '#user_pass', 'password' );
-		await Promise.all( [
-			page.waitForURL( /wp-admin/, { timeout: 120_000 } ),
-			page.click( '#wp-submit' ),
-		] );
+	let authed = false;
+	for ( let attempt = 0; attempt < 8 && ! authed; attempt++ ) {
+		// reauth=1 forces the form even when Playground's auto-login would
+		// redirect — the session must come from real credentials + cookie,
+		// not the one-shot auto-login.
+		await page
+			.goto( '/wp-login.php?reauth=1', { timeout: 120_000 } )
+			.catch( () => {} );
+		if (
+			await page
+				.locator( '#user_login' )
+				.isVisible( { timeout: 5_000 } )
+				.catch( () => false )
+		) {
+			// Blueprint-seeded admin of the disposable Playground site.
+			await page.fill( '#user_login', 'admin' );
+			await page.fill( '#user_pass', 'password' );
+			await page.click( '#wp-submit' );
+			await page
+				.waitForURL( /wp-admin/, { timeout: 60_000 } )
+				.catch( () => {} );
+		}
+		await page
+			.goto( '/wp-admin/', { timeout: 120_000 } )
+			.catch( () => {} );
+		const adminBar = await page
+			.locator( '#wpadminbar' )
+			.isVisible( { timeout: 10_000 } )
+			.catch( () => false );
+		const cookies = await page.context().cookies();
+		authed =
+			adminBar &&
+			cookies.some( ( c ) => c.name.startsWith( 'wordpress_logged_in' ) );
+		if ( ! authed ) {
+			await new Promise( ( r ) => setTimeout( r, 5000 ) );
+		}
+	}
+	if ( ! authed ) {
+		await browser.close();
+		throw new Error( 'Could not establish an authenticated admin session' );
 	}
 	await page.context().storageState( { path: STATE_PATH } );
 	await browser.close();
