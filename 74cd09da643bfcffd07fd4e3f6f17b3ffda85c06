@@ -2,3 +2,8 @@ Task: Multisite coverage
 Summary: MultisiteTest (@group ms-required, skipped single-site) proves per-site isolation: CPT usable on new sites, variations/attrs/usage invisible cross-site, Propagate::run touches only its own site's instances, and the skipped-notice option is site-local. npm run test:php:ms runs the suite under WP_MULTISITE=1. Also hardened RestTest's wrapper assertion to parse_blocks (multisite editors lack unfiltered_html, so filter_block_content re-serializes and strips the core/ namespace).
 Files: tests/php/MultisiteTest.php, tests/php/RestTest.php, package.json
 Why: FR6.
+
+Phase Verification Report — Phase 2: PHP harness & retrofit
+Automated: npm run test:php → 89 tests OK (4 ms-required skipped); npm run test:php:ms → 89 tests OK; includes/ coverage 81.8% lines (gate 80%) via --xdebug=coverage.
+Manual steps proposed: run both suites with Docker, spot-check PropagateTest and MultisiteTest.
+User confirmation: 'Yes, Phase 2 verified — checkpoint it and continue with Phase 3 (E2E + visual regression).' (2026-10-21)
