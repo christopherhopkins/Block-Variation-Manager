@@ -150,7 +150,12 @@ test.describe( 'visual baselines', () => {
 
 	test( 'tools listing row', async ( { page } ) => {
 		await ensureFixtures( page );
-		await page.goto( '/wp-admin/edit.php?post_type=bvm_variation' );
+		// Search-filtered view: other tests create variations too, and the
+		// row's position (and alternate-row striping) must stay deterministic.
+		await page.goto(
+			'/wp-admin/edit.php?post_type=bvm_variation&s=' +
+				encodeURIComponent( VISUAL_TITLE )
+		);
 		const row = page
 			.getByRole( 'row' )
 			.filter( { hasText: VISUAL_TITLE } )
