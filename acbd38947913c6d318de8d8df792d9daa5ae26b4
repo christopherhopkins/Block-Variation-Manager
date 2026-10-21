@@ -3,3 +3,8 @@ Summary: Unit tests for every remaining JS module. Added @testing-library/react 
 Coverage: source/ at 96.9% stmts / 88.1% branch / 97.3% funcs / 98.8% lines (threshold 80%). No source/ changes, so the committed build/ is untouched.
 Files: tests/js/** (12 new suites + 8 stubs), jest.config.cjs, package.json, package-lock.json
 Why: FR4 (full retrofit) — every JS module now has behavior-pinning tests, including the §9 invariants around overrides and preset exclusion.
+
+Phase Verification Report — Phase 1: JS unit harness & retrofit
+Automated: CI=true npm run test:unit → 16 suites / 135 tests passed; coverage 96.9% stmts / 88.1% branch / 97.3% funcs / 98.8% lines (gate 80%).
+Manual steps proposed: run npm run test:unit (16/135 green), coverage run, spot-check preset.test.js invariant tests.
+User confirmation: 'Yes, Phase 1 verified — checkpoint it and continue with Phase 2.' (2026-10-21)
