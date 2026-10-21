@@ -156,6 +156,12 @@ test.describe( 'visual baselines', () => {
 			'/wp-admin/edit.php?post_type=bvm_variation&s=' +
 				encodeURIComponent( VISUAL_TITLE )
 		);
+		// Row-actions ("Edit | Quick Edit | …") reserve height only when the
+		// environment reports hover support, which varies between headless
+		// runs — hide them so the row height is deterministic.
+		await page.addStyleTag( {
+			content: '.row-actions { display: none !important; }',
+		} );
 		const row = page
 			.getByRole( 'row' )
 			.filter( { hasText: VISUAL_TITLE } )
