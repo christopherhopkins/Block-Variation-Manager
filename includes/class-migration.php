@@ -6,35 +6,88 @@ if ( ! defined( 'ABSPATH' ) ) {
 }
 
 /**
- * One-shot migration from the plugin's original `ncss_*` identifiers to
- * `bvm_*`. Safe to run repeatedly — guarded by an option flag.
+ * One-shot migrations, each guarded by the `bvm_migration_version` option
+ * (numeric compare — safe to run repeatedly).
  *
- * What moves:
+ * v1 — rename the plugin's original `ncss_*` identifiers to `bvm_*`:
  *   - post_type           `ncss_block_variation` → `bvm_variation`
  *   - post meta keys       `_ncss_variation_*`    → `_bvm_variation_*`
  *   - block attribute keys  `ncssVariationId`      → `bvmVariationId`
  *                           `ncssOverriddenAttrs`  → `bvmOverriddenAttrs`
  *     (inside post_content JSON — runs a SQL REPLACE)
+ *   Runs early on `init` (priority 5). On sites that never had the plugin
+ *   under its former name this is effectively a no-op.
  *
- * Runs once early on `init`. On sites that never had the plugin under its
- * former name this is effectively a no-op (the UPDATEs match zero rows).
+ * v2 — reset stale propagation snapshots after the §9.18 bake
+ *   reclassification (see maybe_run_v2). Runs late on `init` (priority 999)
+ *   because it needs the block registry populated.
  */
 class Migration {
 	private const VERSION_OPTION = 'bvm_migration_version';
-	private const TARGET_VERSION = '1';
+	private const TARGET_VERSION = '2';
 
 	public static function init(): void {
 		add_action( 'init', [ self::class, 'maybe_run' ], 5 );
+		// v2 must classify block types, so it runs AFTER block registration
+		// (core and vendors register on init ~10).
+		add_action( 'init', [ self::class, 'maybe_run_v2' ], 999 );
 	}
 
 	public static function maybe_run(): void {
-		if ( get_option( self::VERSION_OPTION ) === self::TARGET_VERSION ) {
+		if ( (int) get_option( self::VERSION_OPTION ) >= 1 ) {
 			return;
 		}
 		self::run();
 		// Autoloaded: this option is read on every request's init — leaving
 		// it non-autoloaded costs one extra uncached query per request
 		// forever on sites without a persistent object cache.
+		update_option( self::VERSION_OPTION, '1', true );
+	}
+
+	/**
+	 * v2: reset propagation snapshots for block types whose bake
+	 * classification flipped when block_needs_bake() stopped trusting
+	 * is_dynamic() (§9.18). While those blocks were misclassified, every
+	 * variation save advanced `_bvm_propagated_source` via the attrs-only
+	 * early exit WITHOUT rewriting any instance, so the snapshot no longer
+	 * describes what instances actually carry — the in-sync guard would flag
+	 * every one of them diverged forever. Deleting the snapshot falls back to
+	 * the documented conservative first run (compare against the CURRENT
+	 * source: matching instances converge as no-ops, differing ones are
+	 * flagged for a manual re-save, nothing is clobbered).
+	 *
+	 * Scoped to flipped types only — is_dynamic() true AND needs_bake true —
+	 * so valid snapshots on genuinely static blocks keep their precision.
+	 */
+	public static function maybe_run_v2(): void {
+		if ( (int) get_option( self::VERSION_OPTION ) >= 2 ) {
+			return;
+		}
+
+		$ids = get_posts(
+			[
+				'post_type'      => BVM_CPT,
+				'post_status'    => 'any',
+				'posts_per_page' => -1,
+				'fields'         => 'ids',
+				'no_found_rows'  => true,
+			]
+		);
+		$registry = class_exists( '\\WP_Block_Type_Registry' )
+			? \WP_Block_Type_Registry::get_instance()
+			: null;
+
+		foreach ( $ids as $id ) {
+			$block_type = CPT::get_block_type( (int) $id );
+			if ( null === $block_type || null === $registry ) {
+				continue;
+			}
+			$type = $registry->get_registered( $block_type );
+			if ( $type && $type->is_dynamic() && CPT::block_needs_bake( $block_type ) ) {
+				delete_post_meta( (int) $id, BVM_META_PROPAGATED_SOURCE );
+			}
+		}
+
 		update_option( self::VERSION_OPTION, self::TARGET_VERSION, true );
 	}
 

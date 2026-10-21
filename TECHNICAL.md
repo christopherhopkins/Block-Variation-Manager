@@ -42,9 +42,9 @@ reach every instance through **three independent channels**:
 
 | Channel | Where | What it updates | For which blocks |
 |---|---|---|---|
-| Render-time merge | `render_block_data` filter (every frontend render) | Attributes only, in memory | Dynamic blocks (has `render_callback`) — attrs drive output |
+| Render-time merge | `render_block_data` filter (every frontend render) + `kadence_blocks_frontend_build_css` (Kadence's head-CSS pass, §9.19) | Attributes only, in memory | Dynamic blocks (has `render_callback`) — attrs drive output |
 | Editor sync | `editor.BlockEdit` HOC effect (open posts) | Attributes in the editor store | All linked blocks while a post is open |
-| Cron re-bake | `bvm_propagate_variation` WP-Cron job | `post_content` on disk (baked HTML + attrs + inner templates) | Static-save blocks (no `render_callback`) and any variation with an inner-block template |
+| Cron re-bake | `bvm_propagate_variation` WP-Cron job | `post_content` on disk (baked HTML + attrs + inner templates) | Markup-bearing blocks (`CPT::block_needs_bake()`, §9.18 — static save() OR a WP 6.6+ markup-filter callback) and any variation with an inner-block template |
 
 Per-instance customization is preserved by **`bvmOverriddenAttrs`** (a list of
 attribute names the user changed on that instance — those keys are never
@@ -57,7 +57,9 @@ attrs on every request — attribute merging is sufficient) and *static* (their
 `save()` bakes attribute-derived markup into `post_content` at save time —
 attribute merging at render is a no-op, so the stored HTML itself must be
 rewritten). Kadence blocks are dynamic (request-time CSS from attrs); most
-`core/*` display blocks are static.
+`core/*` display blocks are static. Beware: since WP 6.6 many static-save
+core blocks carry a cosmetic `render_callback`, so `is_dynamic()` no longer
+answers this question — see §9.18.
 
 ---
 
@@ -132,7 +134,7 @@ comment in `post_content`, which is also how usage discovery works (§3.5).
 
 | Option | Autoload | Shape | Purpose |
 |---|---|---|---|
-| `bvm_migration_version` | **yes** (read every request) | string `'1'` | One-shot `ncss_*` → `bvm_*` rename migration guard (`Migration`). |
+| `bvm_migration_version` | **yes** (read every request) | string `'2'` | One-shot migration guard (`Migration`), compared numerically: v1 = `ncss_*` → `bvm_*` rename; v2 = stale-snapshot reset after the §9.18 bake reclassification. |
 | `bvm_propagate_skipped` | no (admin-only reads) | `{ [variationId]: SkippedRow[] }` | Instances the last propagation refused to overwrite. `SkippedRow = { id, title, edit_link, permalink, overrides: string[], inner_diverged: bool, content_diverged: bool }`. Rendered by `Propagate::render_admin_notice` (capability-filtered per viewer), cleared via the notice's Dismiss link (`handle_dismiss`, nonce `bvm_dismiss_propagate`). |
 
 ### 3.5 Usage discovery
@@ -313,10 +315,10 @@ root-fallback path is only taken for root-capable types.
 
 | File | Class | Responsibility |
 |---|---|---|
-| `class-migration.php` | `Migration` | One-shot rename `ncss_*` → `bvm_*` (post type, meta keys, attr keys in content via SQL REPLACE). Flushes the object cache when rows changed. Guarded by autoloaded `bvm_migration_version`. |
-| `class-cpt.php` | `CPT` | CPT + meta registration, admin list columns, `enter_title_here` placeholder, the save-time meta sync (`sync_attrs_from_content`), source-block search (`find_block`), default merging (`merge_with_defaults`), tuple derivation (`blocks_to_tuples`), usage queries (`usage_where` / `list_usage` / `count_usage` / `usage_post_ids`), `block_needs_bake` (keyed on `!is_dynamic()`), meta accessors (`get_attrs`, `get_block_type`, `get_inner_blocks`). |
+| `class-migration.php` | `Migration` | One-shot migrations guarded by autoloaded `bvm_migration_version`: v1 rename `ncss_*` → `bvm_*` (post type, meta keys, attr keys in content via SQL REPLACE; flushes the object cache when rows changed; init prio 5), v2 stale-snapshot reset for §9.18-reclassified block types (init prio 999 — needs the block registry). |
+| `class-cpt.php` | `CPT` | CPT + meta registration, admin list columns, `enter_title_here` placeholder, the save-time meta sync (`sync_attrs_from_content`), source-block search (`find_block`), default merging (`merge_with_defaults`), tuple derivation (`blocks_to_tuples`), usage queries (`usage_where` / `list_usage` / `count_usage` / `usage_post_ids`), `block_needs_bake` (markup-bearing classification, §9.18), meta accessors (`get_attrs`, `get_block_type`, `get_inner_blocks`). |
 | `class-attributes.php` | `Attributes` | Injects `bvmVariationId`/`bvmOverriddenAttrs` into every block type; owns `excluded_attrs()` (filter `bvm_excluded_attrs`) and `strip_excluded()`. |
-| `class-render.php` | `Render` | The `render_block_data` merge (precedence: overrides > preset > instance; type-checked; excluded-key safe). |
+| `class-render.php` | `Render` | The attr merge (precedence: overrides > preset > instance; type-checked; excluded-key safe), hooked on `render_block_data` AND on `kadence_blocks_frontend_build_css` (Kadence's raw-content head-CSS pass, §9.19). |
 | `class-rest.php` | `Rest` | `bvm/v1` routes, per-object permission callbacks, create/update/delete handlers, `wrap_for_editing`, attrs-splice content updates, `serialize_single_block` (core `get_comment_delimited_block_content`), inner-tree sanitizer, response serializer. |
 | `class-inserter.php` | `Inserter` | Registers each published variation as a block-inserter variation via `get_block_type_variations`. **One query per request** (static map grouped by block type, 500 cap), flushed on variation saves. |
 | `class-assets.php` | `Assets` | Enqueues `build/entry.js`/`.css`, localizes `window.BVM` (see below), seeds the variation editor's root template from the wrapper chain. |
@@ -408,7 +410,9 @@ never fire `save_post`).
 | `bvm_propagate_variation` | action (cron) | `($variation_id, $after_id)` | The propagation job. Args are `[id, 0]` for a fresh run; continuation events carry the ID cursor. |
 
 **Consumed (ordering matters):** `save_post_bvm_variation` — priority 10
-`CPT::sync_attrs_from_content`, priority 20 `Propagate::schedule`. Both are
+`CPT::sync_attrs_from_content`, priority 20 `Propagate::schedule`. Also
+`kadence_blocks_frontend_build_css` (third-party; the render merge must run
+inside Kadence's head-CSS pass — §9.19). Both are
 temporarily removed-and-restored in two places: `Rest::create_variation`
 (sync only, around insert) and `Propagate::update_instance_content` (both,
 when rewriting a nested-variation instance). Also: `render_block_data`,
@@ -600,6 +604,65 @@ the content; `trees_match()` gates on it, and the bake-splice path only runs
 for static blocks in the first place. Keep any new comparison site behind the
 same gate.
 
+### 9.18 `is_dynamic()` is not the static-vs-dynamic signal (WP 6.6+)
+
+Since WP 6.6, core attaches lightweight render callbacks to several
+static-save blocks (`block_core_heading_render`, `block_core_list_render`,
+`render_block_core_button`, `render_block_core_image`, …). These callbacks
+only *filter the saved markup* — the block's content still lives in baked
+`post_content`, and the render-time attr merge remains a no-op for their
+output. Classifying bake-necessity on `! is_dynamic()` therefore silently
+killed the cron channel for them: no channel updated the frontend until each
+post was reopened and re-saved in the editor (the exact shipped bug).
+
+`CPT::block_needs_bake()` is the single classification site. Its rule: a
+block needs bake when it has no `render_callback`, OR when it is "dynamic"
+but declares markup-sourced attributes (`source: html/rich-text/attribute/…`
+— baked HTML is content-bearing, so the callback is a markup filter) —
+EXCEPT blocks that also declare `uniqueID`/`uniqueId`, whose saved markup
+embeds per-instance identity: baking those flags every instance diverged
+forever (§9.17), so they stay on the attr-merge channel. Never reintroduce a
+bare `is_dynamic()` test, and route every new static-vs-dynamic decision
+through `block_needs_bake()`. Grep audit:
+
+```bash
+grep -rn "is_dynamic" includes/
+# every hit outside CPT::block_needs_bake() (and Migration v2's flip check)
+# must route its bake decision through block_needs_bake()
+```
+
+Corollary: the attrs-only early exit in `Propagate::run()` writes the
+snapshot without rewriting any instance. That is correct *only when the
+classification is correct* — under misclassification it advances the
+snapshot past instances that were never updated, permanently failing the
+§9.5 in-sync guard (Migration v2 cleans up the damage this bug left).
+
+### 9.19 `render_block_data` is not the only attribute pipeline
+
+Kadence builds its frontend CSS in TWO places, and only one of them sees
+`render_block_data`: on classic (non-block) themes,
+`Kadence_Blocks_Frontend::frontend_inline_css` (wp_enqueue_scripts, i.e.
+during `wp_head`, before any block renders) `parse_blocks()`es the raw
+`post_content` and builds each block's CSS from those **unmerged** attrs;
+the block's render callback then *skips* rebuilding CSS whose style id the
+head pass already registered (`Kadence_Blocks_CSS::has_styles`). So on a
+classic theme the stale baked attrs win and a variation's style change
+(e.g. rowlayout `bgColor`) never reaches the frontend — while on a block
+theme content renders before `wp_head`, the render-time merge runs first,
+and everything looks fine. Test on a classic theme (the Playground default
+is a block theme) before concluding a merge-channel change works.
+
+`Render::init` therefore hooks the same merge onto Kadence's
+`kadence_blocks_frontend_build_css` filter, which that pass applies to
+every top-level and inner block. Any new attribute-merge consumer, or any
+vendor adapter with its own parse-content CSS pass, needs the equivalent
+hook, and `Render::apply_variation` must keep tolerating non-array input
+(that filter's chain may carry objects).
+
+---
+
+## 10. Known limitations
+
 - **Parts of inner-block behavior remain pending a maintainer design
   decision** (updated 2026-08-19 — do NOT change these without the
   maintainer's direction on how children should function): (a) free-form
@@ -628,7 +691,17 @@ same gate.
 - **First propagation after upgrading to snapshot-aware code is
   conservative**: differing instances are flagged, not rewritten; a manual
   resave of each flagged post (or of the variation after reconciling)
-  converges them, after which snapshots make runs precise.
+  converges them, after which snapshots make runs precise. The same applies
+  after Migration v2's snapshot reset (§9.18): instances that missed
+  propagations while their block type was misclassified are flagged on the
+  next run rather than auto-converged — re-save each flagged post once.
+- **html-sourced text on identity-bearing dynamic blocks does not
+  propagate.** A Kadence heading's text lives in saved markup
+  (`content`, `source: html`), but Kadence blocks are excluded from the bake
+  path (§9.17/§9.18 — uniqueID-baked markup), and the render-time attr merge
+  can't rewrite markup. Attr-driven styling propagates; text changes reach
+  instances only via the editor sync + re-save. Resolving this is part of
+  the pending inner-block design decision below.
 - Multi-parent child blocks use their **first** declared parent for wrapping.
 - Caps: inserter map 500 variations, list route 200, usage list 500/page.
 - The skipped-notice option uses read-modify-write without locking; parallel

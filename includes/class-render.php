@@ -20,13 +20,29 @@ if ( ! defined( 'ABSPATH' ) ) {
 class Render {
 	public static function init(): void {
 		add_filter( 'render_block_data', [ self::class, 'apply_variation' ], 10, 1 );
+		// render_block_data is NOT the only attribute pipeline (§9.19):
+		// on classic themes Kadence builds its head CSS during
+		// wp_enqueue_scripts by parse_blocks()ing raw post_content —
+		// before render_block_data ever runs — and its render callback
+		// then skips rebuilding CSS that the head pass already registered.
+		// Without this hook, attr changes (bgColor, …) never reach the
+		// frontend CSS until a re-save bakes them into post_content.
+		// Kadence applies the filter to every block, top-level and inner.
+		// Harmless when Kadence is absent (the filter never fires).
+		add_filter( 'kadence_blocks_frontend_build_css', [ self::class, 'apply_variation' ] );
 	}
 
 	/**
-	 * @param array<string,mixed> $parsed_block
-	 * @return array<string,mixed>
+	 * Non-array input passes through untouched: kadence_blocks_frontend_build_css
+	 * consumers may hand objects down the chain (KB's own loop guards for them).
+	 *
+	 * @param array<string,mixed>|mixed $parsed_block
+	 * @return array<string,mixed>|mixed
 	 */
-	public static function apply_variation( array $parsed_block ): array {
+	public static function apply_variation( $parsed_block ) {
+		if ( ! is_array( $parsed_block ) ) {
+			return $parsed_block;
+		}
 		$attrs = $parsed_block['attrs'] ?? [];
 		if ( ! is_array( $attrs ) ) {
 			return $parsed_block;

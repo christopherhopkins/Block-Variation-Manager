@@ -368,14 +368,27 @@ class CPT {
 	 * Whether a block type's static HTML needs server-side rebaking when its
 	 * variation changes.
 	 *
-	 * Keyed on the property that actually matters — static save() vs dynamic
-	 * render — not a vendor prefix. Static blocks bake attr-derived markup
-	 * into post_content, so render_block_data merging is a no-op for them and
-	 * only a rebake propagates; dynamic blocks (anything with a
-	 * render_callback, which includes Kadence's request-time CSS pipeline and
-	 * dynamic core blocks) render from attrs on every request. Blocks
-	 * registered only client-side are treated as static — the conservative
-	 * default for third-party suites.
+	 * is_dynamic() alone stopped being a static-vs-dynamic signal in WP 6.6:
+	 * core gave several static-save blocks lightweight render callbacks that
+	 * merely filter the SAVED markup (block_core_heading_render,
+	 * block_core_list_render, render_block_core_button,
+	 * render_block_core_image, …). Their content still lives in baked
+	 * post_content — render_block_data merging is a no-op for their output —
+	 * so they must stay in the bake path (§9.18). Classification:
+	 *
+	 *   - no render_callback → static save() → needs bake;
+	 *   - dynamic but declaring markup-sourced attributes (source: html /
+	 *     rich-text / attribute / …) → the saved HTML is content-bearing, the
+	 *     callback is a markup filter, not a generator → needs bake —
+	 *   - EXCEPT when the block also declares a uniqueID/uniqueId attribute:
+	 *     those vendors (Kadence) bake per-instance identity into their saved
+	 *     markup, so the splice/compare machinery would flag every instance
+	 *     diverged forever (§9.17); they propagate via the render-time attr
+	 *     merge instead;
+	 *   - dynamic with no markup-sourced attrs → renders from attrs → no bake.
+	 *
+	 * Blocks registered only client-side are treated as static — the
+	 * conservative default for third-party suites.
 	 *
 	 * Filter `bvm_block_needs_bake` to include/exclude specific blocks.
 	 */
@@ -383,8 +396,17 @@ class CPT {
 		$default = true;
 		if ( class_exists( '\\WP_Block_Type_Registry' ) ) {
 			$type = \WP_Block_Type_Registry::get_instance()->get_registered( $block_name );
-			if ( $type ) {
-				$default = ! $type->is_dynamic();
+			if ( $type && $type->is_dynamic() ) {
+				$attrs   = is_array( $type->attributes ) ? $type->attributes : [];
+				$sourced = false;
+				foreach ( $attrs as $def ) {
+					if ( is_array( $def ) && isset( $def['source'] ) ) {
+						$sourced = true;
+						break;
+					}
+				}
+				$identity = isset( $attrs['uniqueID'] ) || isset( $attrs['uniqueId'] );
+				$default  = $sourced && ! $identity;
 			}
 		}
 		return (bool) apply_filters( 'bvm_block_needs_bake', $default, $block_name );
