@@ -111,9 +111,18 @@ class RestTest extends WP_UnitTestCase {
 				'content'    => '<!-- wp:list-item --><li>item</li><!-- /wp:list-item -->',
 			]
 		);
-		$content = get_post( $data['id'] )->post_content;
-		// Synthetic core/list wrapper so the editor renders the child-only block.
-		$this->assertStringContainsString( '<!-- wp:core/list -->', $content );
+		// Synthetic core/list wrapper so the editor renders the child-only
+		// block. Parse rather than string-match: without unfiltered_html
+		// (multisite editors) filter_block_content re-serializes the comment
+		// and strips the core/ namespace prefix.
+		$roots = array_values(
+			array_filter(
+				parse_blocks( get_post( $data['id'] )->post_content ),
+				static fn( $b ) => ! empty( $b['blockName'] )
+			)
+		);
+		$this->assertSame( 'core/list', $roots[0]['blockName'] );
+		$this->assertSame( 'core/list-item', $roots[0]['innerBlocks'][0]['blockName'] );
 		$this->assertSame( 'core/list-item', $data['block_type'] );
 	}
 
