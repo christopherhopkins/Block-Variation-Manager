@@ -7,6 +7,7 @@
 	"scripts": {
 		"build": "webpack --config webpack.config.cjs --mode production",
 		"start": "webpack --config webpack.config.cjs --mode development --watch",
+		"test:unit": "wp-scripts test-unit-js --config jest.config.cjs",
 		"playground": "npx -y @wp-playground/cli@latest server --blueprint=./blueprint.json",
 		"playground:local": "node scripts/playground-local.mjs"
 	},
