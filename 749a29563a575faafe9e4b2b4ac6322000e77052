@@ -1,0 +1,4 @@
+Task: Core-flow E2E
+Summary: Three serial tests: (1) save a heading as a variation from the sidebar incl. the dirty-post confirm dialog, assert creation snackbar + linked panel state; (2) apply the variation to a fresh block, assert applied snackbar + linked state, publish; (3) Tools → Block Variations row shows the variation with core/heading and non-zero usage. Playground timing: creates take ~10s under WASM PHP, so slow-path assertions use 60s timeouts.
+Files: tests/e2e/variation-flow.spec.js
+Why: FR3 core flow — proves save → link → apply → listing against a real WordPress.
