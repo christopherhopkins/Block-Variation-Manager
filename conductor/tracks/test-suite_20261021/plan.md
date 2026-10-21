@@ -44,7 +44,7 @@ Track: `test-suite_20261021` · Spec: [spec.md](./spec.md)
 - [x] Task: Prove the gate — red: PR #4 (intentional excluded-attrs break) failed Jest in run 39676618259, closed unmerged; green: run 39689604293 fully green on `287195c`, attempt 2 re-run also green (baseline stability across two consecutive CI runs). Linux visual baselines bootstrapped from the pinned container's artifacts.
 - [x] Task: Phase Verification & Checkpoint (Refer to workflow.md) — user confirmed 2026-10-21
 
-## Phase 5: Documentation
+## Phase 5: Documentation [checkpoint: a2bfc52]
 
 - [x] Task: Update TECHNICAL.md §11/§12, README, and `workflow.md` Development Commands (real commands, matrix, baseline procedure) `a2bfc52`
-- [~] Task: Phase Verification & Checkpoint (Refer to workflow.md)
+- [x] Task: Phase Verification & Checkpoint (Refer to workflow.md) — user confirmed 2026-10-21
