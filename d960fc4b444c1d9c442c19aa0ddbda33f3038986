@@ -1,1 +1,6 @@
 In-flight refinement to the visual task: other suites create variations, shifting the fixed row's position and alternate-row striping — the listing screenshot now uses the admin search view so the row is always first. Full local suite (probe + flow + visual, 7 tests) green in one run.
+
+Phase Verification Report — Phase 3: E2E & visual regression
+Automated: npx playwright test → 7 passed (probe, variation lifecycle x3, visual x3) vs Playground mounting the working tree.
+Manual steps proposed: npm run test:e2e, inspect Playground admin + win32 baselines.
+User confirmation: 'Yes, Phase 3 verified — checkpoint it and continue with Phase 4 (CI).' (2026-10-21)
