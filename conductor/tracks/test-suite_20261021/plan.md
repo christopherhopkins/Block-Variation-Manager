@@ -4,8 +4,8 @@ Track: `test-suite_20261021` · Spec: [spec.md](./spec.md)
 
 ## Phase 1: JS unit harness & retrofit
 
-- [ ] Task: Configure Jest via `@wordpress/scripts` (`test:unit`, coverage thresholds ≥80% for `source/`)
-- [ ] Task: Seed tests for pure modules
+- [x] Task: Configure Jest via `@wordpress/scripts` (`test:unit`, coverage thresholds ≥80% for `source/`) `0569183`
+- [~] Task: Seed tests for pure modules
     - [ ] Write failing tests for `source/lib/equality.js`
     - [ ] Write failing tests for `source/lib/preset.js` (incl. excluded-attrs invariant)
     - [ ] Write failing tests for `source/lib/class-pairs.js`
