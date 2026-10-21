@@ -1,0 +1,4 @@
+Task: Seed tests for pure modules
+Summary: 33 unit tests covering source/lib/equality.js (strict deep comparison, type/null handling, nesting), source/lib/preset.js (excluded-attrs invariant pinned per-key via PRESET_EXCLUDED_ATTRS, undefined-dropping, linked-child opacity per TECHNICAL.md §9.16, non-positive id handling), and source/lib/class-pairs.js (pair involution, base-key agreement).
+Files: tests/js/lib/equality.test.js, tests/js/lib/preset.test.js, tests/js/lib/class-pairs.test.js (all new)
+Why: Pins the §9 invariants most likely to regress (preset exclusion, linked-child capture) in fast, dependency-free tests.
