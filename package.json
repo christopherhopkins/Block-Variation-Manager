@@ -8,6 +8,9 @@
 		"build": "webpack --config webpack.config.cjs --mode production",
 		"start": "webpack --config webpack.config.cjs --mode development --watch",
 		"test:unit": "wp-scripts test-unit-js --config jest.config.cjs",
+		"env:start": "wp-env start",
+		"env:stop": "wp-env stop",
+		"test:php": "wp-env run tests-cli --env-cwd=wp-content/plugins/Block-Variation-Manager vendor/bin/phpunit",
 		"playground": "npx -y @wp-playground/cli@latest server --blueprint=./blueprint.json",
 		"playground:local": "node scripts/playground-local.mjs"
 	},
@@ -15,6 +18,7 @@
 		"@testing-library/dom": "^10.4.2",
 		"@testing-library/jest-dom": "^6.9.1",
 		"@testing-library/react": "^16.3.3",
+		"@wordpress/env": "^10.39.0",
 		"@wordpress/scripts": "^30.0.0"
 	}
 }
