@@ -10,11 +10,11 @@ Track: `test-suite_20261021` · Spec: [spec.md](./spec.md)
     - [x] Write failing tests for `source/lib/preset.js` (incl. excluded-attrs invariant)
     - [x] Write failing tests for `source/lib/class-pairs.js`
     - [x] Fix/confirm implementations until green
-- [~] Task: Retrofit remaining JS modules
-    - [ ] Tests for `source/lib/block-registry.js`, `rest-path.js`, `variation-store.js` (mock `@wordpress/*`)
-    - [ ] Tests for `source/constants.js` and testable `source/filters/` logic (extract pure helpers where needed — FR8)
-    - [ ] Rebuild and commit `build/` if any `source/` file changed
-- [ ] Task: Phase Verification & Checkpoint (Refer to workflow.md)
+- [x] Task: Retrofit remaining JS modules `acbd389`
+    - [x] Tests for `source/lib/block-registry.js`, `rest-path.js`, `variation-store.js` (mock `@wordpress/*`)
+    - [x] Tests for `source/constants.js` and testable `source/filters/` logic (no FR8 extraction needed — all filters, components, and admin modules tested directly via stubs; coverage 96.9%/88.1%)
+    - [x] Rebuild and commit `build/` if any `source/` file changed (no `source/` changes made)
+- [~] Task: Phase Verification & Checkpoint (Refer to workflow.md)
 
 ## Phase 2: PHP harness & retrofit
 
