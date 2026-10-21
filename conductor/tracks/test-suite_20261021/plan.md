@@ -5,12 +5,12 @@ Track: `test-suite_20261021` · Spec: [spec.md](./spec.md)
 ## Phase 1: JS unit harness & retrofit
 
 - [x] Task: Configure Jest via `@wordpress/scripts` (`test:unit`, coverage thresholds ≥80% for `source/`) `0569183`
-- [~] Task: Seed tests for pure modules
-    - [ ] Write failing tests for `source/lib/equality.js`
-    - [ ] Write failing tests for `source/lib/preset.js` (incl. excluded-attrs invariant)
-    - [ ] Write failing tests for `source/lib/class-pairs.js`
-    - [ ] Fix/confirm implementations until green
-- [ ] Task: Retrofit remaining JS modules
+- [x] Task: Seed tests for pure modules `9f6431f`
+    - [x] Write failing tests for `source/lib/equality.js`
+    - [x] Write failing tests for `source/lib/preset.js` (incl. excluded-attrs invariant)
+    - [x] Write failing tests for `source/lib/class-pairs.js`
+    - [x] Fix/confirm implementations until green
+- [~] Task: Retrofit remaining JS modules
     - [ ] Tests for `source/lib/block-registry.js`, `rest-path.js`, `variation-store.js` (mock `@wordpress/*`)
     - [ ] Tests for `source/constants.js` and testable `source/filters/` logic (extract pure helpers where needed — FR8)
     - [ ] Rebuild and commit `build/` if any `source/` file changed
