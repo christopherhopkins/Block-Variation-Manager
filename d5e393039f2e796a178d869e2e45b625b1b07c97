@@ -1,0 +1,5 @@
+Task: Visual regression
+Summary: Three element-scoped screenshot tests with idempotent REST-created fixtures (fixed-name variation + linked published post): the variation sidebar panels (expanded, Apply select populated), the Tools listing row (date column masked), and the propagated front-end heading render. openEditor() reloads-and-retries because a cold Playground serves partial pages that never finish mounting. Baselines are platform-suffixed; win32 committed and verified stable across consecutive local runs.
+Linux baselines: generated in/for the pinned CI container image (mcr.microsoft.com/playwright:v1.64.1-noble; see tests.yml comment). Local Docker generation proved flaky under host contention, so the linux baselines are bootstrapped from the first CI run's artifact during the Phase 4 CI proof and committed then.
+Files: tests/e2e/visual.spec.js, tests/e2e/visual.spec.js-snapshots/*-win32.png
+Why: FR5.
