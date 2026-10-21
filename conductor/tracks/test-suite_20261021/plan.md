@@ -23,12 +23,12 @@ Track: `test-suite_20261021` · Spec: [spec.md](./spec.md)
     - [x] Write failing tests: `Attributes` excluded-attrs/preset derivation; §9.1 slashing round-trips
     - [x] Write failing tests: `Propagate` snapshot in-sync guards + override preservation
     - [x] Confirm green
-- [~] Task: Retrofit remaining PHP classes
-    - [ ] Tests for `CPT`, `Rest` (route auth/validation), `Render` (render-time merge)
-    - [ ] Tests for `Inserter`, `BlockRegistry` (wrapper chains), `Migration`, `Assets`, `Plugin`
-    - [ ] Testability refactors as needed (FR8) — re-check §9 per touched file, `php -l` all touched files
-- [ ] Task: Multisite coverage — wp-env multisite config + multisite test group (CPT, propagation, REST isolation)
-- [ ] Task: Phase Verification & Checkpoint (Refer to workflow.md)
+- [x] Task: Retrofit remaining PHP classes `839e94e`
+    - [x] Tests for `CPT`, `Rest` (route auth/validation), `Render` (render-time merge)
+    - [x] Tests for `Inserter`, `BlockRegistry` (wrapper chains), `Migration`, `Assets`, `Plugin` (+ `BlockNeedsBakeTest` §9.18 regression suite)
+    - [x] Testability refactors as needed (FR8) — none required; no `includes/` file touched
+- [x] Task: Multisite coverage — `test:php:ms` (WP_MULTISITE=1), MultisiteTest isolation suite `74cd09d`
+- [~] Task: Phase Verification & Checkpoint (Refer to workflow.md)
 
 ## Phase 3: E2E & visual regression
 
