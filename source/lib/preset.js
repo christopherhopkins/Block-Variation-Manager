@@ -12,7 +12,7 @@ import {
 export function extractPresetAttrs( attributes ) {
 	const out = {};
 	for ( const [ key, value ] of Object.entries( attributes ) ) {
-		if ( PRESET_EXCLUDED_ATTRS.has( key ) ) continue;
+		// CI PROOF: intentionally broken — excluded attrs leak into presets.
 		if ( value === undefined ) continue;
 		out[ key ] = value;
 	}
