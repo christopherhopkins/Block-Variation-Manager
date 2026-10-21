@@ -1,0 +1,4 @@
+Task: Seed invariant tests
+Summary: AttributesTest pins the excluded-attrs contract (mirror of JS PRESET_EXCLUDED_ATTRS), the bvm_excluded_attrs filter, attribute injection, publish gating, and the §9.1 wp_slash round-trip (quotes + backslashes survive meta writes). PropagateTest covers the bake path end-to-end: in-sync instance rebaked (text + level reach post_content), overrides skip + surface in the skipped option, hand-edited content skipped as content_diverged, unlinked/other-id instances untouched, snapshot refresh after completed runs, publish gating, and instance-only attrs (className) surviving the merge.
+Files: tests/php/AttributesTest.php, tests/php/PropagateTest.php
+Why: These are the §9 invariants most likely to regress server-side.
