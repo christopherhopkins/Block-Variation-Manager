@@ -1,0 +1,4 @@
+Task: Phase 5 documentation
+Summary: TECHNICAL.md §11/§11.1/§12, README Development section, workflow.md Development Commands — commands, matrix, baseline-update procedure, environment caveats (wp-env DNS offline check, Playground auto-login).
+Files: TECHNICAL.md, README.md, conductor/workflow.md
+Why: FR9.
