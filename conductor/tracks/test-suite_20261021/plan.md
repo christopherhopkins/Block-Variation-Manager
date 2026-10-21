@@ -16,7 +16,7 @@ Track: `test-suite_20261021` · Spec: [spec.md](./spec.md)
     - [x] Rebuild and commit `build/` if any `source/` file changed (no `source/` changes made)
 - [x] Task: Phase Verification & Checkpoint (Refer to workflow.md) — user confirmed 2026-10-21
 
-## Phase 2: PHP harness & retrofit
+## Phase 2: PHP harness & retrofit [checkpoint: 74cd09d]
 
 - [x] Task: Configure `@wordpress/env` + PHPUnit (`test:php`, bootstrap loads plugin, coverage ≥80% for `includes/`) `583bfe3`
 - [x] Task: Seed invariant tests `ffd4b6a`
@@ -28,11 +28,11 @@ Track: `test-suite_20261021` · Spec: [spec.md](./spec.md)
     - [x] Tests for `Inserter`, `BlockRegistry` (wrapper chains), `Migration`, `Assets`, `Plugin` (+ `BlockNeedsBakeTest` §9.18 regression suite)
     - [x] Testability refactors as needed (FR8) — none required; no `includes/` file touched
 - [x] Task: Multisite coverage — `test:php:ms` (WP_MULTISITE=1), MultisiteTest isolation suite `74cd09d`
-- [~] Task: Phase Verification & Checkpoint (Refer to workflow.md)
+- [x] Task: Phase Verification & Checkpoint (Refer to workflow.md) — user confirmed 2026-10-21
 
 ## Phase 3: E2E & visual regression
 
-- [ ] Task: Playwright harness (`test:e2e`) against `@wp-playground/cli` mounting the working tree
+- [~] Task: Playwright harness (`test:e2e`) against `@wp-playground/cli` mounting the working tree
 - [ ] Task: Core-flow E2E — save variation → apply → assert `bvmVariationId` + Tools listing
 - [ ] Task: Visual regression — baselines for variation panel, Tools list, propagated front-end render; document baseline-update procedure
 - [ ] Task: Phase Verification & Checkpoint (Refer to workflow.md)
