@@ -120,4 +120,5 @@ jobs:
           path: |
             test-results/
             playwright-report/
+            tests/e2e/visual.spec.js-snapshots/
           retention-days: 7
