@@ -22,6 +22,11 @@ module.exports = defineConfig( {
 		baseURL: `http://127.0.0.1:${ PORT }`,
 		viewport: { width: 1280, height: 900 },
 		trace: 'retain-on-failure',
+		// Written by global-setup.cjs (explicit admin login).
+		storageState: require( 'path' ).join(
+			__dirname,
+			'tests/e2e/.auth-state.json'
+		),
 	},
 	webServer: {
 		command: 'node scripts/playground-e2e.mjs',
