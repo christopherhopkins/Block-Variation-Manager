@@ -32,10 +32,10 @@ Track: `test-suite_20261021` · Spec: [spec.md](./spec.md)
 
 ## Phase 3: E2E & visual regression
 
-- [~] Task: Playwright harness (`test:e2e`) against `@wp-playground/cli` mounting the working tree
-- [ ] Task: Core-flow E2E — save variation → apply → assert `bvmVariationId` + Tools listing
-- [ ] Task: Visual regression — baselines for variation panel, Tools list, propagated front-end render; document baseline-update procedure
-- [ ] Task: Phase Verification & Checkpoint (Refer to workflow.md)
+- [x] Task: Playwright harness (`test:e2e`) against `@wp-playground/cli` mounting the working tree `c50ace7` (deviation: plain @playwright/test, see git note)
+- [x] Task: Core-flow E2E — save variation → apply → assert `bvmVariationId` + Tools listing `749a295`
+- [x] Task: Visual regression — baselines for variation panel, Tools list, propagated front-end render `d5e3930` (win32 committed; linux baselines bootstrap from the pinned CI container during the Phase 4 proof — see git note)
+- [~] Task: Phase Verification & Checkpoint (Refer to workflow.md)
 
 ## Phase 4: CI
 
