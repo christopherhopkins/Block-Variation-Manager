@@ -6,3 +6,12 @@ file tables + BVM/BVMTours localize docs, §9.21 invariant. README: guided
 tours feature blurb (auto-once, revisit buttons, per-user persistence).
 
 No code changes; php -l n/a.
+
+--- Phase Verification Report: Phase 4 (E2E, docs & release polish) ---
+Automated: npx playwright test (13/13 incl. visual baselines), CI=true npm
+run test:unit --coverage (201, gates met), npm run test:php (124 OK).
+Manual plan: playground:local → early-dismissal (Esc) persistence check on
+the management tour; docs skim (§3.6/§4.7/§9.21, README).
+Notes: variation-panels-linux.png deleted per §11.1 — first push's linux E2E
+leg goes red until the baseline is committed from CI artifacts.
+User confirmation: 'Yes' to Phase 4 verification (2026-10-22).
