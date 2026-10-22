@@ -9,13 +9,13 @@
   - [x] Add `driver.js` (pinned, MIT) to package.json; implement wrapper that
         builds a driver tour from a declarative step list
   - [x] Verify tests pass; coverage ≥80%
-- [ ] Task: Per-user tour-state meta (PHP)
-  - [ ] Write failing PHPUnit tests: meta registered with `show_in_rest`, auth
+- [x] Task: Per-user tour-state meta (PHP) `102c12b`
+  - [x] Write failing PHPUnit tests: meta registered with `show_in_rest`, auth
         restricted to own user, sanitization of the JSON map, REST round-trip
         via `/wp/v2/users/me`
-  - [ ] Implement `includes/class-tours.php` (register_meta + sanitize
+  - [x] Implement `includes/class-tours.php` (register_meta + sanitize
         callback); `php -l` clean; §9.1 audit on any slashed writes
-  - [ ] Verify tests pass
+  - [x] Verify tests pass
 - [ ] Task: JS tour-state store
   - [ ] Write failing Jest tests: read flag, mark complete (optimistic +
         persisted), auto-start gating logic
