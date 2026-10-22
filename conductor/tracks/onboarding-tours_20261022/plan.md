@@ -28,14 +28,14 @@
 
 ## Phase 2: Management-screen tour
 
-- [ ] Task: Tour definition + "Start tour" button on Tools → Block Variations
-  - [ ] Write failing Jest tests: step definitions resolve to expected
+- [x] Task: Tour definition + "Start tour" button on Tools → Block Variations `524e245`
+  - [x] Write failing Jest tests: step definitions resolve to expected
         selectors, button mounts, relaunch ignores completed flag, auto-start
         fires only when unset
-  - [ ] Implement admin entry (enqueue on the `edit-bvm_variation` screen
+  - [x] Implement admin entry (enqueue on the `edit-bvm_variation` screen
         only), steps, button beside the page title; admin-scheme-aligned
         styles
-  - [ ] Verify tests pass; `npm run build`, commit regenerated `build/`
+  - [x] Verify tests pass; `npm run build`, commit regenerated `build/`
 - [ ] Task: Phase Verification & Checkpoint (Refer to workflow.md)
 
 ## Phase 3: Editor tours
