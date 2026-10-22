@@ -2,3 +2,8 @@ Task: Phase 2 verification & report
 Summary: All ~64 raw findings adversarially verified. 2 refuted (INV-1: RenderHeadCssTest already covers §9.19; QUA-7: Playwright retries re-evaluate the module in a fresh worker). Two confirmed empirically: SEC-3 (anonymous core-route read of published variations, proven with a live unauthenticated GET against wp-env) and COR-11 (editor stores rich-text attrs as RichTextData objects, proven via the store in Playground — deepEqual(object, string) is always false). Final queue: 1 high, 17 medium, 26 low FIX items + 4 DOCS; 1 DEFER (COR-6, blocked by the §10 children design freeze); ~10 accepted with justification.
 Files: conductor/tracks/code-review_20261021/review.md, index.md
 Why: FR2/FR3.
+
+Phase Verification Report — Phase 2: Verification & report
+Automated: n/a (report-only phase); empirical probes: anonymous REST read (SEC-3), RichTextData store check (COR-11).
+Manual: user reviewed the High/Medium dispositions incl. SEC-1 mitigation approach and COR-3 docs-fix.
+User confirmation: 'Yes, Phase 2 verified — checkpoint it and start Phase 3 fixes.' (2026-10-21)
