@@ -283,6 +283,10 @@ class CPT {
 				'show_in_menu'        => 'tools.php',
 				'show_in_rest'        => true,
 				'rest_base'           => 'block-variation-manager',
+				// SEC-3: core allows anonymous reads of published posts on
+				// this route regardless of `public => false`; the subclass
+				// gates reads on edit_posts like every bvm/v1 route.
+				'rest_controller_class' => Rest_Controller::class,
 				'menu_icon'           => 'dashicons-screenoptions',
 				// Intentionally no 'custom-fields' — we don't want devs
 				// editing the raw _bvm_variation_attrs JSON through the
@@ -314,12 +318,15 @@ class CPT {
 			BVM_CPT,
 			BVM_META_ATTRS,
 			[
-				'type'          => 'string',
-				'single'        => true,
-				'show_in_rest'  => [
+				'type'              => 'string',
+				'single'            => true,
+				'show_in_rest'      => [
 					'schema' => [ 'type' => 'string' ],
 				],
-				'auth_callback' => function () {
+				// SEC-1/SEC-4: writes through the core /wp/v2 route bypass the
+				// bvm/v1 sanitizers — enforce size/JSON/kses here too.
+				'sanitize_callback' => [ Attributes::class, 'sanitize_json_meta' ],
+				'auth_callback'     => function () {
 					return current_user_can( 'edit_posts' );
 				},
 			]
@@ -329,12 +336,13 @@ class CPT {
 			BVM_CPT,
 			BVM_META_INNER_BLOCKS,
 			[
-				'type'          => 'string',
-				'single'        => true,
-				'show_in_rest'  => [
+				'type'              => 'string',
+				'single'            => true,
+				'show_in_rest'      => [
 					'schema' => [ 'type' => 'string' ],
 				],
-				'auth_callback' => function () {
+				'sanitize_callback' => [ Attributes::class, 'sanitize_json_meta' ],
+				'auth_callback'     => function () {
 					return current_user_can( 'edit_posts' );
 				},
 			]
@@ -490,6 +498,27 @@ class CPT {
 			];
 		}
 		return $out;
+	}
+
+	/**
+	 * One usage row in the list_usage shape, or null for a vanished post.
+	 *
+	 * @return array{id:int,title:string,post_type:string,status:string,edit_link:?string,permalink:?string}|null
+	 */
+	public static function usage_row( int $post_id ): ?array {
+		$post = get_post( $post_id );
+		if ( ! $post ) {
+			return null;
+		}
+		$permalink = get_permalink( $post_id );
+		return [
+			'id'        => $post_id,
+			'title'     => '' !== $post->post_title ? $post->post_title : __( '(no title)', 'block-variation-manager' ),
+			'post_type' => $post->post_type,
+			'status'    => $post->post_status,
+			'edit_link' => get_edit_post_link( $post_id, 'raw' ),
+			'permalink' => is_string( $permalink ) && '' !== $permalink ? $permalink : null,
+		];
 	}
 
 	/**

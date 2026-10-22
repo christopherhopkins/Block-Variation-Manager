@@ -31,6 +31,7 @@ require_once BVM_DIR . 'includes/class-cpt.php';
 require_once BVM_DIR . 'includes/class-attributes.php';
 require_once BVM_DIR . 'includes/class-render.php';
 require_once BVM_DIR . 'includes/class-rest.php';
+require_once BVM_DIR . 'includes/class-rest-controller.php';
 require_once BVM_DIR . 'includes/class-inserter.php';
 require_once BVM_DIR . 'includes/class-assets.php';
 require_once BVM_DIR . 'includes/class-block-registry.php';

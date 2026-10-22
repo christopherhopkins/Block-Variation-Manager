@@ -84,7 +84,16 @@ class Assets {
 		$variation_root_chain = [];
 		$variation_usage      = 0;
 		if ( $is_variation_editor && isset( $_GET['post'] ) ) {
-			$post_id              = (int) $_GET['post'];
+			$post_id = (int) $_GET['post'];
+			// SEC-10: the query arg is attacker-chosen — only localize data
+			// for an actual variation post.
+			if ( BVM_CPT !== get_post_type( $post_id ) ) {
+				$post_id = 0;
+			}
+		} else {
+			$post_id = 0;
+		}
+		if ( $post_id > 0 ) {
 			$variation_block_type = (string) ( CPT::get_block_type( $post_id ) ?? '' );
 			$variation_usage      = CPT::count_usage( $post_id );
 			if ( '' !== $variation_block_type ) {

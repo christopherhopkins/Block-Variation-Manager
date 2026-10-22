@@ -260,10 +260,13 @@ class RestTest extends WP_UnitTestCase {
 		$rows = $this->request( 'GET', '/bvm/v1/variations/' . $data['id'] . '/instances' )->get_data();
 		$this->assertSame( [ $instance ], array_column( $rows['instances'], 'id' ) );
 
-		// A contributor cannot edit the admin's draft → hidden.
+		// SEC-5: a contributor cannot edit the variation at all → denied
+		// outright rather than served a filtered list.
 		$this->as_role( 'contributor' );
-		$rows = $this->request( 'GET', '/bvm/v1/variations/' . $data['id'] . '/instances' )->get_data();
-		$this->assertSame( [], $rows['instances'] );
+		$this->assertSame(
+			403,
+			$this->request( 'GET', '/bvm/v1/variations/' . $data['id'] . '/instances' )->get_status()
+		);
 	}
 
 	public function test_usage_route_counts_instances(): void {

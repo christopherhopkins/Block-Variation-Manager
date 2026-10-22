@@ -44,13 +44,16 @@ class Rest {
 			]
 		);
 
+		// SEC-5: both usage surfaces enumerate references across other
+		// users' drafts/private posts, so they require edit rights on the
+		// variation itself, not just a global edit_posts.
 		register_rest_route(
 			self::NAMESPACE,
 			'/variations/(?P<id>\d+)/usage',
 			[
 				'methods'             => \WP_REST_Server::READABLE,
 				'callback'            => [ self::class, 'get_usage' ],
-				'permission_callback' => [ self::class, 'can_read' ],
+				'permission_callback' => [ self::class, 'can_edit_item' ],
 			]
 		);
 
@@ -60,7 +63,7 @@ class Rest {
 			[
 				'methods'             => \WP_REST_Server::READABLE,
 				'callback'            => [ self::class, 'get_instances' ],
-				'permission_callback' => [ self::class, 'can_read' ],
+				'permission_callback' => [ self::class, 'can_edit_item' ],
 			]
 		);
 
@@ -100,10 +103,15 @@ class Rest {
 				'type'              => 'string',
 				'required'          => false,
 				'sanitize_callback' => 'sanitize_text_field',
+				// SEC-9: a forged value would otherwise reach block-comment
+				// delimiters in post_content as a bogus block name.
+				'validate_callback' => [ self::class, 'validate_block_type' ],
 			],
 			'attrs'      => [
-				'type'     => 'object',
-				'required' => false,
+				'type'              => 'object',
+				'required'          => false,
+				// SEC-1: cap runaway payloads before they hit meta.
+				'validate_callback' => [ self::class, 'validate_json_size' ],
 			],
 			// Pre-serialized block comment (from @wordpress/blocks.serialize).
 			// Preferred over server-side serialization for blocks with static
@@ -119,8 +127,9 @@ class Rest {
 			// accordion+pane, tabs+tab, etc.) where children carry their own
 			// meaningful attrs.
 			'inner_blocks' => [
-				'type'     => 'array',
-				'required' => false,
+				'type'              => 'array',
+				'required'          => false,
+				'validate_callback' => [ self::class, 'validate_json_size' ],
 			],
 			// Update-only: when true and no 'content' is supplied, splice the
 			// attrs into the EXISTING parsed post_content (preserving children
@@ -137,6 +146,42 @@ class Rest {
 
 	public static function can_read(): bool {
 		return current_user_can( 'edit_posts' );
+	}
+
+	/**
+	 * Valid serialized block name: namespace/slug, lowercase alphanumerics
+	 * and dashes, matching core's registration rules (SEC-9).
+	 *
+	 * @param mixed $value
+	 * @return true|\WP_Error
+	 */
+	public static function validate_block_type( $value ) {
+		if ( is_string( $value ) && preg_match( '#^[a-z][a-z0-9-]*/[a-z][a-z0-9-]*$#', $value ) ) {
+			return true;
+		}
+		return new \WP_Error(
+			'bvm_bad_block_type',
+			__( 'block_type must be a valid block name (namespace/name).', 'block-variation-manager' ),
+			[ 'status' => 400 ]
+		);
+	}
+
+	/**
+	 * Reject attr/inner-tree payloads over the storage ceiling (SEC-1).
+	 *
+	 * @param mixed $value
+	 * @return true|\WP_Error
+	 */
+	public static function validate_json_size( $value ) {
+		$encoded = wp_json_encode( $value );
+		if ( false !== $encoded && strlen( $encoded ) <= Attributes::MAX_JSON_BYTES ) {
+			return true;
+		}
+		return new \WP_Error(
+			'bvm_payload_too_large',
+			__( 'Payload exceeds the maximum stored size.', 'block-variation-manager' ),
+			[ 'status' => 400 ]
+		);
 	}
 
 	/**
@@ -212,14 +257,31 @@ class Rest {
 		// list_usage spans drafts/private posts across all users; only
 		// surface rows this user could actually open — otherwise any
 		// edit_posts user could enumerate other authors' unpublished titles.
-		$rows = array_values(
-			array_filter(
-				CPT::list_usage( $id ),
-				static function ( $row ) {
-					return current_user_can( 'edit_post', (int) $row['id'] );
+		// COR-D1: the capability filter must run BEFORE the row cap — a naive
+		// LIMIT-then-filter hides a viewer's own instances behind rows they
+		// cannot see. Keyset-paginate until the cap of visible rows is met.
+		$rows   = [];
+		$cursor = 0;
+		$cap    = 200;
+		while ( count( $rows ) < $cap ) {
+			$ids = CPT::usage_post_ids( $id, $cursor, 50 );
+			if ( empty( $ids ) ) {
+				break;
+			}
+			foreach ( $ids as $post_id ) {
+				$cursor = $post_id;
+				if ( ! current_user_can( 'edit_post', $post_id ) ) {
+					continue;
 				}
-			)
-		);
+				$row = CPT::usage_row( $post_id );
+				if ( null !== $row ) {
+					$rows[] = $row;
+					if ( count( $rows ) >= $cap ) {
+						break;
+					}
+				}
+			}
+		}
 		return [ 'id' => $id, 'instances' => $rows ];
 	}
 
@@ -245,7 +307,12 @@ class Rest {
 			return new \WP_Error( 'bvm_bad_request', __( 'block_type is required.', 'block-variation-manager' ), [ 'status' => 400 ] );
 		}
 
-		$preset_attrs = is_array( $attrs ) ? Attributes::strip_excluded( $attrs ) : [];
+		// SEC-1: attr values are merged into OTHER users' blocks at render and
+		// baked into their posts by cron — hold the writer to their own
+		// content rules (kses unless unfiltered_html).
+		$preset_attrs = is_array( $attrs )
+			? Attributes::sanitize_untrusted( Attributes::strip_excluded( $attrs ) )
+			: [];
 		$client_content = $request->get_param( 'content' );
 		$inner_content  = is_string( $client_content ) && '' !== trim( $client_content )
 			? $client_content
@@ -283,7 +350,7 @@ class Rest {
 
 		$inner_blocks = $request->get_param( 'inner_blocks' );
 		if ( is_array( $inner_blocks ) ) {
-			update_post_meta( $post_id, BVM_META_INNER_BLOCKS, wp_slash( wp_json_encode( self::sanitize_inner_tree( $inner_blocks ) ) ) );
+			update_post_meta( $post_id, BVM_META_INNER_BLOCKS, wp_slash( wp_json_encode( Attributes::sanitize_untrusted( self::sanitize_inner_tree( $inner_blocks ) ) ) ) );
 		}
 
 		// Seed the propagation snapshot so the first cron run can tell
@@ -326,7 +393,7 @@ class Rest {
 		if ( is_string( $content ) && '' !== trim( $content ) && '' !== $effective_block_type ) {
 			$update['post_content'] = self::wrap_for_editing( $effective_block_type, $content );
 		} elseif ( $sync_content && is_array( $attrs ) && '' !== $effective_block_type ) {
-			$spliced = self::splice_attrs_into_content( $post, $effective_block_type, $attrs );
+			$spliced = self::splice_attrs_into_content( $post, $effective_block_type, Attributes::sanitize_untrusted( $attrs ) );
 			if ( null !== $spliced ) {
 				$update['post_content'] = $spliced;
 			}
@@ -340,11 +407,11 @@ class Rest {
 		}
 
 		if ( is_array( $attrs ) ) {
-			// wp_slash: see create_variation.
-			update_post_meta( $id, BVM_META_ATTRS, wp_slash( wp_json_encode( Attributes::strip_excluded( $attrs ) ) ) );
+			// wp_slash: see create_variation. sanitize_untrusted: SEC-1.
+			update_post_meta( $id, BVM_META_ATTRS, wp_slash( wp_json_encode( Attributes::sanitize_untrusted( Attributes::strip_excluded( $attrs ) ) ) ) );
 		}
 		if ( is_array( $inner_blocks ) ) {
-			update_post_meta( $id, BVM_META_INNER_BLOCKS, wp_slash( wp_json_encode( self::sanitize_inner_tree( $inner_blocks ) ) ) );
+			update_post_meta( $id, BVM_META_INNER_BLOCKS, wp_slash( wp_json_encode( Attributes::sanitize_untrusted( self::sanitize_inner_tree( $inner_blocks ) ) ) ) );
 		}
 
 		// A meta-only update never fires save_post, so make sure the

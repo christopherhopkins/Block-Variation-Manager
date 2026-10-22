@@ -37,11 +37,18 @@ class Migration {
 		if ( (int) get_option( self::VERSION_OPTION ) >= 1 ) {
 			return;
 		}
+		// SEC-8: the first requests after activation race here (any visitor,
+		// no lock) — without this, concurrent hits each repeat the bulk
+		// UPDATEs and the global cache flush.
+		if ( ! self::acquire_lock() ) {
+			return;
+		}
 		self::run();
 		// Autoloaded: this option is read on every request's init — leaving
 		// it non-autoloaded costs one extra uncached query per request
 		// forever on sites without a persistent object cache.
 		update_option( self::VERSION_OPTION, '1', true );
+		self::release_lock();
 	}
 
 	/**
@@ -61,6 +68,9 @@ class Migration {
 	 */
 	public static function maybe_run_v2(): void {
 		if ( (int) get_option( self::VERSION_OPTION ) >= 2 ) {
+			return;
+		}
+		if ( ! self::acquire_lock() ) {
 			return;
 		}
 
@@ -89,6 +99,30 @@ class Migration {
 		}
 
 		update_option( self::VERSION_OPTION, self::TARGET_VERSION, true );
+		self::release_lock();
+	}
+
+	/**
+	 * One short-lived lock shared by both migrations (SEC-8). add_option is
+	 * atomic (INSERT fails if the row exists), unlike set_transient's
+	 * update-or-insert; the lock self-expires via the timestamp check so a
+	 * fatal mid-migration cannot wedge the site for more than a minute.
+	 */
+	private static function acquire_lock(): bool {
+		$now = time();
+		if ( add_option( 'bvm_migration_lock', (string) $now, '', false ) ) {
+			return true;
+		}
+		$held = (int) get_option( 'bvm_migration_lock' );
+		if ( $held && $now - $held < 60 ) {
+			return false;
+		}
+		update_option( 'bvm_migration_lock', (string) $now, false );
+		return true;
+	}
+
+	private static function release_lock(): void {
+		delete_option( 'bvm_migration_lock' );
 	}
 
 	private static function run(): void {

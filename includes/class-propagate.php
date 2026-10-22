@@ -44,6 +44,19 @@ class Propagate {
 		add_action( self::HOOK, [ self::class, 'run' ], 10, 2 );
 		add_action( 'admin_notices', [ self::class, 'render_admin_notice' ] );
 		add_action( 'admin_init', [ self::class, 'handle_dismiss' ] );
+		// COR-8: a deleted/trashed variation must not leave its skipped-notice
+		// rows or its pending initial cron event behind.
+		add_action( 'before_delete_post', [ self::class, 'cleanup_for_variation' ] );
+		add_action( 'wp_trash_post', [ self::class, 'cleanup_for_variation' ] );
+	}
+
+	/** Remove a variation's queued work and notice rows (COR-8). */
+	public static function cleanup_for_variation( int $post_id ): void {
+		if ( BVM_CPT !== get_post_type( $post_id ) ) {
+			return;
+		}
+		wp_clear_scheduled_hook( self::HOOK, [ $post_id, 0 ] );
+		self::write_skipped( $post_id, [] );
 	}
 
 	public static function schedule( int $post_id, \WP_Post $post ): void {
@@ -85,8 +98,13 @@ class Propagate {
 
 		// Nothing to rewrite server-side: root attrs reach the frontend via
 		// the render-time merge filter. Still refresh the snapshot so later
-		// runs (if a template appears) compare against the right baseline.
+		// runs (if a template appears) compare against the right baseline,
+		// and clear stale skipped rows from when the variation still had a
+		// bake/inner reason (COR-D3).
 		if ( ! $needs_bake && ! $has_inner ) {
+			if ( 0 === $after_id ) {
+				self::write_skipped( $variation_id, [] );
+			}
 			self::write_snapshot( $variation_id );
 			return;
 		}
@@ -110,6 +128,20 @@ class Propagate {
 			return;
 		}
 		$skipped = ( 0 === $after_id ) ? [] : self::read_skipped_for( $variation_id );
+
+		// COR-1: schedule the continuation BEFORE processing the batch. A
+		// timeout/fatal mid-batch previously killed the whole chain (WP had
+		// already unscheduled this event), stranding the remaining instances
+		// and leaving the already-rewritten ones to fail the stale-snapshot
+		// in-sync check forever. Re-processing a batch is safe: instances
+		// matching the current source are recognized as up to date below.
+		$is_final_batch = count( $ids ) < self::BATCH_SIZE;
+		if ( ! $is_final_batch ) {
+			$args = [ $variation_id, $ids[ count( $ids ) - 1 ] ];
+			if ( false === wp_next_scheduled( self::HOOK, $args ) ) {
+				wp_schedule_single_event( time() + 30, self::HOOK, $args );
+			}
+		}
 
 		$ctx = [
 			'variation_id'    => $variation_id,
@@ -164,17 +196,10 @@ class Propagate {
 
 		self::write_skipped( $variation_id, $skipped );
 
-		if ( count( $ids ) >= self::BATCH_SIZE ) {
-			// Dedupe like schedule(): if run() executes twice with the same
-			// cursor (parallel cron runners, wp-cli alongside web cron), an
-			// unguarded schedule would pile up duplicate continuation events.
-			$args = [ $variation_id, $ids[ count( $ids ) - 1 ] ];
-			if ( false === wp_next_scheduled( self::HOOK, $args ) ) {
-				wp_schedule_single_event( time() + 30, self::HOOK, $args );
-			}
-		} else {
+		if ( $is_final_batch ) {
 			// Final batch done: what we just propagated becomes the baseline
-			// for the next run's in-sync checks.
+			// for the next run's in-sync checks. (Continuations are scheduled
+			// before the batch is processed — see above.)
 			self::write_snapshot( $variation_id );
 		}
 	}
@@ -244,18 +269,24 @@ class Propagate {
 			remove_action( 'save_post_' . BVM_CPT, [ CPT::class, 'sync_attrs_from_content' ], 10 );
 		}
 		kses_remove_filters();
-		wp_update_post(
-			wp_slash(
-				[
-					'ID'           => $inst_id,
-					'post_content' => $content,
-				]
-			)
-		);
-		kses_init();
-		if ( $is_nested_variation ) {
-			add_action( 'save_post_' . BVM_CPT, [ self::class, 'schedule' ], 20, 2 );
-			add_action( 'save_post_' . BVM_CPT, [ CPT::class, 'sync_attrs_from_content' ], 10, 2 );
+		try {
+			wp_update_post(
+				wp_slash(
+					[
+						'ID'           => $inst_id,
+						'post_content' => $content,
+					]
+				)
+			);
+		} finally {
+			// SEC-2: wp_update_post fires third-party save_post hooks inside
+			// the unfiltered window; without the finally, one throwing hook
+			// would leave kses off for the rest of this cron request.
+			kses_init();
+			if ( $is_nested_variation ) {
+				add_action( 'save_post_' . BVM_CPT, [ self::class, 'schedule' ], 20, 2 );
+				add_action( 'save_post_' . BVM_CPT, [ CPT::class, 'sync_attrs_from_content' ], 10, 2 );
+			}
 		}
 	}
 
@@ -349,7 +380,12 @@ class Propagate {
 				if ( $ctx['has_inner'] ) {
 					$inst_inner = is_array( $b['innerBlocks'] ?? null ) ? $b['innerBlocks'] : [];
 					$old_inner  = is_array( $old_source['innerBlocks'] ?? null ) ? $old_source['innerBlocks'] : [];
-					if ( self::trees_match( $inst_inner, $old_inner ) ) {
+					// Already carrying the CURRENT template (a re-processed
+					// batch after an interrupted run, COR-1): up to date, not
+					// diverged.
+					if ( self::trees_match( $inst_inner, $ctx['variation_inner'] ) ) {
+						$applied_inner = true;
+					} elseif ( self::trees_match( $inst_inner, $old_inner ) ) {
 						if ( ! self::trees_match( $inst_inner, $ctx['variation_inner'] ) ) {
 							// Replace from the template, but keep the
 							// instance's own node wherever the template
@@ -385,9 +421,19 @@ class Propagate {
 
 					$in_sync = trim( $inst_prefix ) === trim( $old_prefix )
 						&& trim( $inst_suffix ) === trim( $old_suffix );
-					if ( ! $in_sync ) {
+
+					// Already carrying the CURRENT source's markup and attrs
+					// (a re-processed batch after an interrupted run, COR-1):
+					// up to date, not diverged.
+					$merged_now               = array_merge( $attrs, Attributes::strip_excluded( $ctx['variation_attrs'] ) );
+					$merged_now['bvmVariationId'] = $ctx['variation_id'];
+					$matches_current = trim( $inst_prefix ) === trim( $new_prefix )
+						&& trim( $inst_suffix ) === trim( $new_suffix )
+						&& $merged_now == $attrs;
+
+					if ( ! $in_sync && ! $matches_current ) {
 						$state['content_diverged'] = true;
-					} else {
+					} elseif ( ! $matches_current ) {
 						$merged                   = array_merge( $attrs, Attributes::strip_excluded( $ctx['variation_attrs'] ) );
 						$merged['bvmVariationId'] = $ctx['variation_id'];
 
@@ -611,7 +657,15 @@ class Propagate {
 		if ( empty( $rows ) ) {
 			unset( $all[ $variation_id ] );
 		} else {
-			$all[ $variation_id ] = array_values( $rows );
+			// COR-7: run() can legitimately execute twice with the same
+			// cursor (§9.14's parallel-runner case) — keep one row per post.
+			$by_id = [];
+			foreach ( $rows as $row ) {
+				if ( isset( $row['id'] ) ) {
+					$by_id[ (int) $row['id'] ] = $row;
+				}
+			}
+			$all[ $variation_id ] = array_values( $by_id );
 		}
 		if ( empty( $all ) ) {
 			delete_option( self::SKIPPED_OPT );
@@ -819,12 +873,17 @@ class Propagate {
 		if ( ! isset( $_GET[ self::DISMISS_QUERY ] ) ) {
 			return;
 		}
-		if ( ! current_user_can( 'edit_posts' ) ) {
+		$scope_id = isset( $_GET['bvm_dismiss_variation'] ) ? (int) $_GET['bvm_dismiss_variation'] : 0;
+		// SEC-6: a scoped dismiss needs edit rights on that variation; the
+		// global dismiss clears every user's notices, so it needs
+		// edit_others_posts — not just any edit_posts role.
+		$allowed = $scope_id > 0
+			? current_user_can( 'edit_post', $scope_id )
+			: current_user_can( 'edit_others_posts' );
+		if ( ! $allowed ) {
 			return;
 		}
 		check_admin_referer( self::DISMISS_NONCE );
-
-		$scope_id = isset( $_GET['bvm_dismiss_variation'] ) ? (int) $_GET['bvm_dismiss_variation'] : 0;
 		if ( $scope_id > 0 ) {
 			$all = self::read_all_skipped();
 			unset( $all[ $scope_id ] );

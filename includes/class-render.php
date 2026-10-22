@@ -70,7 +70,9 @@ class Render {
 
 		$overridden = [];
 		if ( isset( $attrs['bvmOverriddenAttrs'] ) && is_array( $attrs['bvmOverriddenAttrs'] ) ) {
-			$overridden = array_flip( $attrs['bvmOverriddenAttrs'] );
+			// COR-15: hand-edited markup can carry non-string entries;
+			// array_flip would warn on every render (walk() filters the same).
+			$overridden = array_flip( array_filter( $attrs['bvmOverriddenAttrs'], 'is_string' ) );
 		}
 
 		// Excluded attrs are stripped when meta is written, but meta rows
