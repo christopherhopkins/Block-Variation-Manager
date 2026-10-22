@@ -95,4 +95,18 @@ Severity: H high · M medium · L low · I info. Disposition: **FIX** (Phase 3),
 
 ---
 
-**Phase 3 queue:** 1 high, 17 medium, 26 low FIX items (some clustered), 4 DOCS items; dispositions updated in place as fixes land.
+## Resolution summary (Phase 3, 2026-10-21)
+
+Every FIX/DOCS item above is resolved; commits carry the finding IDs.
+
+| Commit | Findings resolved |
+|---|---|
+| `1a48189` | SEC-1 (mitigated: write-time kses + 256KB cap; residual documented in §9.7), SEC-2, SEC-3, SEC-5, SEC-6, SEC-8, SEC-9, SEC-10, COR-1, COR-7, COR-8, COR-15, COR-D1, COR-D3 (code half), QUA-1 — **SEC-4 re-verdict: REFUTED** (no `custom-fields` support ⇒ no core-route meta writes; pinned by test, sanitize kept as defense-in-depth) |
+| `be7dba1` | COR-4, COR-5, COR-9/QUA-26, COR-10, COR-11, QUA-20, QUA-22, QUA-27a (build/ rebuilt) |
+| `292d0ae` | QUA-2 (remaining), QUA-3, QUA-8, QUA-9, QUA-12, QUA-13, QUA-14, QUA-15, QUA-16, QUA-17, QUA-18 (partial: heading/meta fixtures consolidated; group fixtures + user-authored suites left local), QUA-21 |
+| `982378d` | QUA-4, QUA-5, QUA-6, QUA-19, QUA-28 (+ two hardenings found en route: cookie-jar readiness probe, guide-before-header dismissal) |
+| `86c3c01` | QUA-10, QUA-25 (partial: permissions/timeouts/SHA-pin third-party/pipefail; composer cache + php-job artifacts accepted), SEC-7, COR-12, COR-14, COR-3 (docs), COR-D2 (docs+comment), COR-D3 (docs half), COR-D4, COR-D5, QUA-11 (guide fixed; lint adoption follow-up — `wp-scripts lint-js` crashes on the current dependency tree) |
+
+§9 upkeep: §9.5 extended (matches-current corollary), §9.7 extended (trust-boundary sanitize rule), **new §9.20** (RichTextData normalization). §10 updated: (b) resolved maintainer-approved; COR-2 residual and COR-6 deferral recorded.
+
+COR-2: **fixed (mitigated)** — the single-edit case is absorbed by the matches-current check; the mid-run multi-edit window remains documented in §10.
