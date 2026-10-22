@@ -16,12 +16,14 @@
   - [x] Implement `includes/class-tours.php` (register_meta + sanitize
         callback); `php -l` clean; §9.1 audit on any slashed writes
   - [x] Verify tests pass
-- [ ] Task: JS tour-state store
-  - [ ] Write failing Jest tests: read flag, mark complete (optimistic +
+- [x] Task: JS tour-state store `ff6824a`
+  - [x] Write failing Jest tests: read flag, mark complete (optimistic +
         persisted), auto-start gating logic
-  - [ ] Implement store/helpers in `source/tours/state.js` using
-        `@wordpress/core-data` user meta
-  - [ ] Verify tests pass
+  - [x] Implement store/helpers in `source/tours/state.js` via
+        `@wordpress/api-fetch` against core `/wp/v2/users/me` (core-data is
+        not an installed package in this repo — api-fetch is the established
+        pattern)
+  - [x] Verify tests pass
 - [ ] Task: Phase Verification & Checkpoint (Refer to workflow.md)
 
 ## Phase 2: Management-screen tour
