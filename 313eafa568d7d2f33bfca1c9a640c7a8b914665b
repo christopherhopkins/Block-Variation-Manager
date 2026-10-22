@@ -1,0 +1,19 @@
+Task: Variation-editor tour (bvm_variation post screen)
+
+Summary: editor.js gained VARIATION_EDITOR_TOUR_ID 'variation-editor' with a
+4-step tour (what this screen is, .editor-post-title name field,
+.bvm-usage-panel usage/propagation, one-root-block rule).
+maybeAutoStartVariationEditorTour gates on BVM.isVariationEditor AND the
+usage panel being in the DOM; UsagePanel schedules it 600ms post-mount (CPT
+only) and carries a 'Take the tour' relaunch link next to the orientation
+banner link. build/ rebuilt and committed.
+
+Files: source/tours/editor.js, source/admin/usage-panel.js,
+tests/js/tours/editor.test.js (+7), tests/js/admin/usage-panel.test.js (+3),
+build/entry.*
+
+Invariants: §9.1 n/a (no PHP changes); §9.11/§9.12 untouched. No new §9
+entry: same localize-seed/DOM-gate pattern as the panel tour.
+
+Why: FR-4 — orient users on the variation source screen and the propagation
+contract.
