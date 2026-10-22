@@ -17,3 +17,12 @@ entry: same localize-seed/DOM-gate pattern as the panel tour.
 
 Why: FR-4 — orient users on the variation source screen and the propagation
 contract.
+
+--- Phase Verification Report: Phase 3 (Editor tours) ---
+Automated: CI=true npm run test:unit --coverage (201 tests pass, global gates
+met) and npm run test:php (124 tests OK, 4 skipped pre-existing).
+Manual plan: playground:local → panel tour auto-start on block selection, no
+re-auto-start, Take the tour relaunch; variation-editor tour on bvm_variation
+edit screen with Usage-panel relaunch link.
+User confirmation: 'Yes — Phase 3 verified, create the checkpoint and
+continue to Phase 4.' (2026-10-22)
