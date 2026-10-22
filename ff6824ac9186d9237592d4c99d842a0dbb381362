@@ -14,3 +14,12 @@ Files:
 
 Why: FR-5 — auto-start-once gating + always-relaunchable tours, shared by all
 three tour surfaces.
+
+--- Phase Verification Report: Phase 1 (Foundation) ---
+Automated: CI=true npm run test:unit (18 suites / 175+22 tests pass; coverage
+gate met, source/tours at 100%) and npm run test:php (121 tests, 374
+assertions, OK; 4 skipped pre-existing).
+Manual plan: playground:local + wp.apiFetch POST /wp/v2/users/me round-trip of
+bvm_tours_completed, invalid-key drop check.
+User confirmation: 'Yes — Phase 1 verified, create the checkpoint and continue
+to Phase 2.' (2026-10-22)
