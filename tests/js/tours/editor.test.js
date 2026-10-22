@@ -78,3 +78,72 @@ describe( 'maybeAutoStartEditorTour', () => {
 		} );
 	} );
 } );
+
+import {
+	VARIATION_EDITOR_TOUR_ID,
+	variationEditorTourSteps,
+	startVariationEditorTour,
+	maybeAutoStartVariationEditorTour,
+} from '../../../source/tours/editor.js';
+
+describe( 'variationEditorTourSteps', () => {
+	it( 'anchors the name field and the usage panel', () => {
+		const anchors = variationEditorTourSteps().map( ( s ) => s.element );
+		expect( anchors ).toEqual(
+			expect.arrayContaining( [
+				'.editor-post-title',
+				'.bvm-usage-panel',
+			] )
+		);
+	} );
+
+	it( 'gives every step a title and description', () => {
+		for ( const step of variationEditorTourSteps() ) {
+			expect( step.title ).toBeTruthy();
+			expect( step.description ).toBeTruthy();
+		}
+	} );
+} );
+
+describe( 'startVariationEditorTour', () => {
+	beforeEach( () => jest.clearAllMocks() );
+
+	it( 'launches with the variation-editor tour id', () => {
+		expect( startVariationEditorTour() ).toBe( true );
+		expect( launchTour ).toHaveBeenCalledWith( {
+			id: VARIATION_EDITOR_TOUR_ID,
+			steps: expect.any( Array ),
+		} );
+	} );
+} );
+
+describe( 'maybeAutoStartVariationEditorTour', () => {
+	beforeEach( () => {
+		jest.clearAllMocks();
+		document.body.innerHTML = '';
+		delete window.BVM;
+	} );
+
+	it( 'does not auto-start outside the variation editor', () => {
+		window.BVM = { isVariationEditor: false };
+		document.body.innerHTML = '<div class="bvm-usage-panel"></div>';
+		expect( maybeAutoStartVariationEditorTour() ).toBe( false );
+		expect( autoStartTour ).not.toHaveBeenCalled();
+	} );
+
+	it( 'does not auto-start before the usage panel renders', () => {
+		window.BVM = { isVariationEditor: true };
+		expect( maybeAutoStartVariationEditorTour() ).toBe( false );
+		expect( autoStartTour ).not.toHaveBeenCalled();
+	} );
+
+	it( 'auto-starts on the variation editor once the panel is visible', () => {
+		window.BVM = { isVariationEditor: true };
+		document.body.innerHTML = '<div class="bvm-usage-panel"></div>';
+		expect( maybeAutoStartVariationEditorTour() ).toBe( true );
+		expect( autoStartTour ).toHaveBeenCalledWith( {
+			id: VARIATION_EDITOR_TOUR_ID,
+			steps: expect.any( Array ),
+		} );
+	} );
+} );

@@ -72,3 +72,68 @@ export function maybeAutoStartEditorTour() {
 	}
 	return autoStartTour( { id: EDITOR_TOUR_ID, steps: editorTourSteps() } );
 }
+
+/** Tour of the variation-editor screen (editing a bvm_variation post). */
+export const VARIATION_EDITOR_TOUR_ID = 'variation-editor';
+
+export function variationEditorTourSteps() {
+	return [
+		{
+			title: __( 'This is a variation source', 'block-variation-manager' ),
+			description: __(
+				'You’re editing the variation itself, not a page. The single block below holds the settings every linked block inherits.',
+				'block-variation-manager'
+			),
+		},
+		{
+			element: '.editor-post-title',
+			title: __( 'Variation name', 'block-variation-manager' ),
+			description: __(
+				'The name editors pick from the Apply dropdown. Keep it recognizable — renaming is safe and changes nothing on pages.',
+				'block-variation-manager'
+			),
+		},
+		{
+			element: '.bvm-usage-panel',
+			title: __( 'Usage', 'block-variation-manager' ),
+			description: __(
+				'Every page using this variation is listed here. Saving propagates your changes to all of them — except attributes a page has overridden.',
+				'block-variation-manager'
+			),
+		},
+		{
+			title: __( 'One root block', 'block-variation-manager' ),
+			description: __(
+				'A variation holds exactly one root block of its type (inner blocks are fine). Edit it freely, then Update to publish the change everywhere.',
+				'block-variation-manager'
+			),
+		},
+	];
+}
+
+/** Relaunch from the usage panel's "Take the tour" link — always runs. */
+export function startVariationEditorTour() {
+	return launchTour( {
+		id: VARIATION_EDITOR_TOUR_ID,
+		steps: variationEditorTourSteps(),
+	} );
+}
+
+/**
+ * Auto-start once per user on the variation editor, gated on the localized
+ * screen flag and the usage panel having rendered.
+ *
+ * @return {boolean} Whether the tour was shown.
+ */
+export function maybeAutoStartVariationEditorTour() {
+	if ( ! window.BVM?.isVariationEditor ) {
+		return false;
+	}
+	if ( ! document.querySelector( '.bvm-usage-panel' ) ) {
+		return false;
+	}
+	return autoStartTour( {
+		id: VARIATION_EDITOR_TOUR_ID,
+		steps: variationEditorTourSteps(),
+	} );
+}

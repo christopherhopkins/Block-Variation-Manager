@@ -10,6 +10,10 @@ import {
 } from '@wordpress/components';
 import { listInstances } from '../lib/variation-store.js';
 import { ORIENTATION_STORAGE_KEY, dispatchOrientationNotice } from './orientation.js';
+import {
+	startVariationEditorTour,
+	maybeAutoStartVariationEditorTour,
+} from '../tours/editor.js';
 
 // QUA-22: the post type is localized by Assets — the literal is only a
 // fallback for test/storybook contexts without the BVM global.
@@ -26,6 +30,15 @@ function UsagePanel() {
 	);
 	const [ instances, setInstances ] = useState( null );
 	const [ error, setError ] = useState( null );
+
+	// Auto-start the screen tour once per user, after the sidebar has had a
+	// chance to render (the tour gates on the panel being in the DOM and on
+	// BVM.isVariationEditor).
+	useEffect( () => {
+		if ( postType !== VARIATION_CPT ) return undefined;
+		const timer = setTimeout( maybeAutoStartVariationEditorTour, 600 );
+		return () => clearTimeout( timer );
+	}, [ postType ] );
 
 	useEffect( () => {
 		if ( ! postId || postType !== VARIATION_CPT ) return;
@@ -148,6 +161,13 @@ function UsagePanel() {
 				style={ { paddingLeft: 0 } }
 			>
 				{ __( 'Show orientation banner', 'block-variation-manager' ) }
+			</Button>
+			<Button
+				variant="link"
+				onClick={ () => startVariationEditorTour() }
+				style={ { paddingLeft: 0, display: 'block' } }
+			>
+				{ __( 'Take the tour', 'block-variation-manager' ) }
 			</Button>
 		</PluginDocumentSettingPanel>
 	);

@@ -1,4 +1,4 @@
-import { render, screen, waitFor, fireEvent } from '@testing-library/react';
+import { render, screen, waitFor, fireEvent, act } from '@testing-library/react';
 import { registerPlugin } from '@wordpress/plugins';
 import { useSelect } from '@wordpress/data';
 
@@ -9,11 +9,16 @@ jest.mock( '../../../source/admin/orientation.js', () => ( {
 	ORIENTATION_STORAGE_KEY: 'bvm-orientation-seen',
 	dispatchOrientationNotice: jest.fn(),
 } ) );
+jest.mock( '../../../source/tours/editor.js', () => ( {
+	startVariationEditorTour: jest.fn( () => true ),
+	maybeAutoStartVariationEditorTour: jest.fn( () => false ),
+} ) );
 
 const { listInstances } = require( '../../../source/lib/variation-store.js' );
 const {
 	dispatchOrientationNotice,
 } = require( '../../../source/admin/orientation.js' );
+const toursMock = require( '../../../source/tours/editor.js' );
 
 require( '../../../source/admin/usage-panel.js' );
 
@@ -123,5 +128,59 @@ describe( 'UsagePanel', () => {
 			window.localStorage.getItem( 'bvm-orientation-seen' )
 		).toBeNull();
 		expect( dispatchOrientationNotice ).toHaveBeenCalledWith( 5 );
+	} );
+} );
+
+describe( 'UsagePanel tour integration', () => {
+	beforeEach( () => {
+		toursMock.startVariationEditorTour.mockClear();
+		toursMock.maybeAutoStartVariationEditorTour.mockClear();
+	} );
+
+	it( 'renders a Take the tour link that relaunches the tour', async () => {
+		mockEditorState( { postId: 42, postType: 'bvm_variation' } );
+		listInstances.mockResolvedValue( [] );
+		render( <UsagePanel /> );
+		await waitFor( () =>
+			expect( screen.getByText( 'Take the tour' ) ).toBeTruthy()
+		);
+		fireEvent.click( screen.getByText( 'Take the tour' ) );
+		expect( toursMock.startVariationEditorTour ).toHaveBeenCalledTimes( 1 );
+	} );
+
+	it( 'schedules a one-shot auto-start after mount', async () => {
+		jest.useFakeTimers();
+		try {
+			mockEditorState( { postId: 42, postType: 'bvm_variation' } );
+			listInstances.mockResolvedValue( [] );
+			render( <UsagePanel /> );
+			expect(
+				toursMock.maybeAutoStartVariationEditorTour
+			).not.toHaveBeenCalled();
+			await act( async () => {
+				jest.advanceTimersByTime( 1000 );
+			} );
+			expect(
+				toursMock.maybeAutoStartVariationEditorTour
+			).toHaveBeenCalledTimes( 1 );
+		} finally {
+			jest.useRealTimers();
+		}
+	} );
+
+	it( 'never schedules the tour outside the variation CPT', async () => {
+		jest.useFakeTimers();
+		try {
+			mockEditorState( { postId: 1, postType: 'post' } );
+			render( <UsagePanel /> );
+			await act( async () => {
+				jest.advanceTimersByTime( 1000 );
+			} );
+			expect(
+				toursMock.maybeAutoStartVariationEditorTour
+			).not.toHaveBeenCalled();
+		} finally {
+			jest.useRealTimers();
+		}
 	} );
 } );
