@@ -3,11 +3,24 @@ import { render, act } from '@testing-library/react';
 const mockAddFilter = jest.fn();
 jest.mock( '@wordpress/hooks', () => ( { addFilter: mockAddFilter } ) );
 
+const mockListeners = new Set();
 jest.mock( '../../../source/lib/variation-store.js', () => ( {
-	subscribe: jest.fn( () => () => {} ),
+	subscribe: jest.fn( ( listener ) => {
+		mockListeners.add( listener );
+		return () => mockListeners.delete( listener );
+	} ),
 	getCached: jest.fn(),
 	ensureVariationLoaded: jest.fn( () => Promise.resolve( null ) ),
 } ) );
+
+/** Fire the store's change notification like notify() would (QUA-8). */
+function notifyStore() {
+	act( () => {
+		for ( const listener of [ ...mockListeners ] ) {
+			listener();
+		}
+	} );
+}
 
 const {
 	getCached,
@@ -298,6 +311,53 @@ describe( 'record still loading', () => {
 		setAttributes.mockClear();
 		act( () => innerProps.setAttributes( { color: 'blue' } ) );
 		expect( setAttributes ).toHaveBeenCalledWith( { color: 'blue' } );
+	} );
+} );
+
+describe( 'live transitions (QUA-8)', () => {
+	it( 'syncs when the record finishes loading after mount', () => {
+		// Mounted while id 5 is still loading (undefined snapshot).
+		const { setAttributes } = renderProbe( {
+			bvmVariationId: 5,
+			color: 'stale',
+			bvmOverriddenAttrs: [],
+		} );
+		expect( setAttributes ).not.toHaveBeenCalled();
+
+		records.set( 5, { id: 5, attrs: { color: 'red' } } );
+		notifyStore();
+		expect( setAttributes ).toHaveBeenCalledWith( { color: 'red' } );
+	} );
+
+	it( 'propagates a variation edit into the open post (the live channel)', () => {
+		records.set( 5, { id: 5, attrs: { color: 'red' } } );
+		const { setAttributes } = renderProbe( {
+			bvmVariationId: 5,
+			color: 'red',
+			bvmOverriddenAttrs: [],
+		} );
+		expect( setAttributes ).not.toHaveBeenCalled(); // in sync at mount
+
+		// The variation is edited elsewhere: new record object, new attrs.
+		records.set( 5, { id: 5, attrs: { color: 'blue' } } );
+		notifyStore();
+		expect( setAttributes ).toHaveBeenCalledWith( { color: 'blue' } );
+	} );
+
+	it( 'keeps overrides pinned through live updates', () => {
+		records.set( 5, { id: 5, attrs: { color: 'red', size: 1 } } );
+		const { setAttributes } = renderProbe( {
+			bvmVariationId: 5,
+			color: 'mine',
+			size: 1,
+			bvmOverriddenAttrs: [ 'color' ],
+		} );
+		records.set( 5, { id: 5, attrs: { color: 'blue', size: 2 } } );
+		notifyStore();
+		expect( setAttributes ).toHaveBeenCalledWith( { size: 2 } );
+		for ( const call of setAttributes.mock.calls ) {
+			expect( call[ 0 ] ).not.toHaveProperty( 'color' );
+		}
 	} );
 } );
 

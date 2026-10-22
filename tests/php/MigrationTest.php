@@ -59,34 +59,10 @@ class MigrationTest extends WP_UnitTestCase {
 		$this->assertSame( 'ncss_block_variation', get_post( $cpt_post )->post_type );
 	}
 
-	public function test_v2_resets_snapshots_only_for_flipped_block_types(): void {
-		update_option( 'bvm_migration_version', '1', true );
-
-		// core/heading is a flipped type in modern WP: is_dynamic() true (its
-		// callback only filters saved markup) AND needs_bake true (§9.18) —
-		// exactly the misclassification v2 exists to repair.
-		$flipped = self::factory()->post->create(
-			[ 'post_type' => BVM_CPT, 'post_status' => 'publish' ]
-		);
-		update_post_meta( $flipped, BVM_META_BLOCK_TYPE, 'core/heading' );
-		update_post_meta( $flipped, BVM_META_PROPAGATED_SOURCE, 'stale-snapshot' );
-
-		// core/paragraph is static-save with no render_callback — not
-		// flipped, its snapshot stays precise. (core/list-item is NOT a safe
-		// control: some WP builds give it a markup-filter callback, making it
-		// a flipped type whose snapshot v2 correctly resets.)
-		$static = self::factory()->post->create(
-			[ 'post_type' => BVM_CPT, 'post_status' => 'publish' ]
-		);
-		update_post_meta( $static, BVM_META_BLOCK_TYPE, 'core/paragraph' );
-		update_post_meta( $static, BVM_META_PROPAGATED_SOURCE, 'valid-snapshot' );
-
-		Migration::maybe_run_v2();
-
-		$this->assertSame( '', get_post_meta( $flipped, BVM_META_PROPAGATED_SOURCE, true ) );
-		$this->assertSame( 'valid-snapshot', get_post_meta( $static, BVM_META_PROPAGATED_SOURCE, true ) );
-		$this->assertSame( '2', get_option( 'bvm_migration_version' ) );
-	}
+	// NOTE (QUA-17): the full v2 reset matrix lives in BlockNeedsBakeTest::
+	// test_migration_v2_resets_snapshots_for_reclassified_types_only — the
+	// near-identical duplicate that lived here was removed; this class keeps
+	// only the version-guard case.
 
 	public function test_v2_skips_when_already_current(): void {
 		update_option( 'bvm_migration_version', '2', true );

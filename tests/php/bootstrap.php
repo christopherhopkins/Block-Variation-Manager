@@ -44,3 +44,6 @@ tests_add_filter(
 );
 
 require $bvm_tests_dir . '/includes/bootstrap.php';
+
+// Shared test fixtures (QUA-18).
+require_once __DIR__ . '/includes/VariationFixtures.php';

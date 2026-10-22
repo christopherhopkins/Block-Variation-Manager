@@ -7,16 +7,10 @@ use BVM\Render;
 
 class RenderTest extends WP_UnitTestCase {
 
+	use VariationFixtures;
+
 	private function create_variation( array $attrs, string $block_type = 'core/heading' ): int {
-		$variation_id = self::factory()->post->create(
-			[
-				'post_type'   => BVM_CPT,
-				'post_status' => 'publish',
-			]
-		);
-		update_post_meta( $variation_id, BVM_META_BLOCK_TYPE, $block_type );
-		update_post_meta( $variation_id, BVM_META_ATTRS, wp_slash( wp_json_encode( $attrs ) ) );
-		return $variation_id;
+		return $this->create_meta_variation( $attrs, $block_type );
 	}
 
 	private function parsed_block( array $attrs, string $name = 'core/heading' ): array {

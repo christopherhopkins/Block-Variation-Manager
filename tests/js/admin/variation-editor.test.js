@@ -30,15 +30,29 @@ function boot( ctx ) {
 		store = require( '../../../source/lib/variation-store.js' );
 		require( '../../../source/admin/variation-editor.js' );
 	} );
-	return {
-		data,
-		blocks,
-		chrome,
-		orientation,
-		store,
-		enforce: data.subscribe.mock.calls[ 0 ]?.[ 0 ],
-		saveSync: data.subscribe.mock.calls[ 1 ]?.[ 0 ],
-	};
+	// QUA-9: identify the two subscribers by BEHAVIOR, not registration
+	// order — only the root enforcer dispatches resetBlocks on an empty,
+	// ready editor.
+	let enforce;
+	let saveSync;
+	for ( const call of data.subscribe.mock.calls ) {
+		const cb         = call[ 0 ];
+		const resetSpy   = jest.fn();
+		data.dispatch.mockReturnValue( { resetBlocks: resetSpy } );
+		data.select.mockImplementation( ( s ) =>
+			s === 'core/block-editor' ? { getBlocks: () => [] } : {}
+		);
+		cb();
+		if ( resetSpy.mock.calls.length > 0 ) {
+			enforce = cb;
+		} else {
+			saveSync = cb;
+		}
+	}
+	data.dispatch.mockReset();
+	data.select.mockReset();
+	blocks.createBlock.mockClear();
+	return { data, blocks, chrome, orientation, store, enforce, saveSync };
 }
 
 /** Wire the select stub to the given store implementations. */
@@ -158,6 +172,18 @@ describe( 'variation-editor boot', () => {
 			expect( resetBlocks ).toHaveBeenCalledWith( [ first ] );
 		} );
 
+		it( 'survives re-entrant store emissions during resetBlocks (QUA-9)', () => {
+			const { data, enforce } = boot( CTX );
+			// @wordpress/data fires subscribers synchronously inside
+			// dispatch(): resetBlocks re-entering the subscriber without the
+			// guard recurses until the stack blows.
+			const resetBlocks = jest.fn( () => enforce() );
+			data.dispatch.mockReturnValue( { resetBlocks } );
+			mockStores( data, { blockEditor: { getBlocks: () => [] } } );
+			expect( () => enforce() ).not.toThrow();
+			expect( resetBlocks ).toHaveBeenCalledTimes( 1 );
+		} );
+
 		it( 'leaves everything alone when the chain is unregistered (COR-10)', () => {
 			const { data, blocks, enforce } = boot( CTX );
 			// The variation's plugin is deactivated: the root type no longer
@@ -194,10 +220,10 @@ describe( 'variation-editor boot', () => {
 			variationBlockType: 'core/heading',
 		};
 
-		function editorState( { saving, success = true, postId = 9 } ) {
+		function editorState( { saving, success = true, postId = 9, autosave = false } ) {
 			return {
 				isSavingPost: () => saving,
-				isAutosavingPost: () => false,
+				isAutosavingPost: () => autosave,
 				didPostSaveRequestSucceed: () => success,
 				getCurrentPostId: () => postId,
 			};
@@ -251,6 +277,17 @@ describe( 'variation-editor boot', () => {
 					},
 				],
 			} );
+		} );
+
+		it( 'ignores autosaves (QUA-9)', () => {
+			const { data, saveSync, store } = boot( CTX );
+			mockStores( data, {
+				editor: editorState( { saving: true, autosave: true } ),
+			} );
+			saveSync(); // autosave in progress — must not count as "saving"
+			mockStores( data, { editor: editorState( { saving: false } ) } );
+			saveSync();
+			expect( store.updateVariation ).not.toHaveBeenCalled();
 		} );
 
 		it( 'does not sync on failed saves', () => {

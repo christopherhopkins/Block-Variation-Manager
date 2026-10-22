@@ -7,25 +7,22 @@ use BVM\Inserter;
 
 class InserterTest extends WP_UnitTestCase {
 
+	use VariationFixtures;
+
 	public function set_up(): void {
 		parent::set_up();
 		Inserter::flush_cache();
 	}
 
+	// QUA-3: the helper must NOT flush the cache itself — the factory create
+	// fires save_post_bvm_variation, and that hook → flush_cache pathway is
+	// exactly what the cache-invalidation test exercises. A helper-side flush
+	// made that test unfailable.
 	private function create_variation( string $title, string $block_type, array $attrs, ?array $inner = null ): int {
-		$vid = self::factory()->post->create(
-			[
-				'post_type'   => BVM_CPT,
-				'post_status' => 'publish',
-				'post_title'  => $title,
-			]
-		);
-		update_post_meta( $vid, BVM_META_BLOCK_TYPE, $block_type );
-		update_post_meta( $vid, BVM_META_ATTRS, wp_slash( wp_json_encode( $attrs ) ) );
+		$vid = $this->create_meta_variation( $attrs, $block_type, $title );
 		if ( null !== $inner ) {
 			update_post_meta( $vid, BVM_META_INNER_BLOCKS, wp_slash( wp_json_encode( $inner ) ) );
 		}
-		Inserter::flush_cache();
 		return $vid;
 	}
 
@@ -60,14 +57,14 @@ class InserterTest extends WP_UnitTestCase {
 
 	public function test_drafts_and_typeless_variations_are_ignored(): void {
 		$vid = $this->create_variation( 'Draft', 'core/heading', [] );
+		// wp_update_post fires save_post_bvm_variation → flush_cache (QUA-3:
+		// the hook, not a helper call, invalidates).
 		wp_update_post( [ 'ID' => $vid, 'post_status' => 'draft' ] );
-		Inserter::flush_cache();
 		$this->assertSame( [], $this->variations_for( 'core/heading' ) );
 
 		self::factory()->post->create(
 			[ 'post_type' => BVM_CPT, 'post_status' => 'publish' ]
 		);
-		Inserter::flush_cache();
 		$this->assertSame( [], $this->variations_for( 'core/heading' ) );
 	}
 

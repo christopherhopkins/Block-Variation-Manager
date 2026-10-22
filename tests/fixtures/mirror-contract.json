@@ -1,0 +1,59 @@
+{
+	"comment": "QUA-21: one contract file for the PHP↔JS mirrors. Jest (tests/js/mirror-contract.test.js) and PHPUnit (MirrorContractTest) both assert against THESE values, so the two implementations cannot drift apart silently.",
+	"excludedAttrs": [
+		"bvmVariationId",
+		"bvmOverriddenAttrs",
+		"className",
+		"anchor",
+		"lock",
+		"metadata",
+		"uniqueID",
+		"uniqueId"
+	],
+	"linkedChildCapture": {
+		"inputObjects": [
+			{
+				"name": "core/paragraph",
+				"attributes": { "placeholder": "plain", "uniqueID": "strip-me", "className": "strip-too" },
+				"innerBlocks": []
+			},
+			{
+				"name": "core/heading",
+				"attributes": { "bvmVariationId": 42, "level": 2, "uniqueID": "ignored" },
+				"innerBlocks": [
+					{
+						"name": "core/paragraph",
+						"attributes": { "placeholder": "child-of-linked" },
+						"innerBlocks": []
+					}
+				]
+			}
+		],
+		"expectedObjects": [
+			{
+				"name": "core/paragraph",
+				"attributes": { "placeholder": "plain" },
+				"innerBlocks": []
+			},
+			{
+				"name": "core/heading",
+				"attributes": { "bvmVariationId": 42 },
+				"innerBlocks": [
+					{
+						"name": "core/paragraph",
+						"attributes": { "placeholder": "child-of-linked" },
+						"innerBlocks": []
+					}
+				]
+			}
+		],
+		"expectedTuples": [
+			[ "core/paragraph", { "placeholder": "plain" }, [] ],
+			[
+				"core/heading",
+				{ "bvmVariationId": 42 },
+				[ [ "core/paragraph", { "placeholder": "child-of-linked" }, [] ] ]
+			]
+		]
+	}
+}

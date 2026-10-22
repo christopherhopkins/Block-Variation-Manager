@@ -4,12 +4,28 @@
  */
 import { useState } from 'react';
 
-export const PanelBody = ( { title, children } ) => (
-	<section>
-		<h2>{ title }</h2>
-		{ children }
-	</section>
-);
+/**
+ * QUA-13: expose initialOpen via aria-expanded so open-state semantics are
+ * assertable. Children stay rendered regardless (the real PanelBody unmounts
+ * them when closed; unit suites assert content, e2e asserts the toggling).
+ */
+export const PanelBody = ( { title, children, initialOpen = true } ) => {
+	const [ open, setOpen ] = useState( initialOpen !== false );
+	return (
+		<section>
+			<h2>
+				<button
+					type="button"
+					aria-expanded={ open }
+					onClick={ () => setOpen( ! open ) }
+				>
+					{ title }
+				</button>
+			</h2>
+			{ children }
+		</section>
+	);
+};
 
 export const Button = ( { children, onClick, disabled, label, variant } ) => (
 	<button

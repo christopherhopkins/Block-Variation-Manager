@@ -247,6 +247,46 @@ class SecurityHardeningTest extends WP_UnitTestCase {
 		$this->assertNotEmpty( get_option( Propagate::SKIPPED_OPT ) );
 	}
 
+	public function test_scoped_dismiss_clears_only_that_variation(): void {
+		$editor = $this->as_role( 'editor' );
+		$mine   = self::factory()->post->create(
+			[ 'post_type' => BVM_CPT, 'post_status' => 'publish', 'post_author' => $editor ]
+		);
+		update_option(
+			Propagate::SKIPPED_OPT,
+			[
+				$mine => [ [ 'id' => 1, 'title' => 'a', 'edit_link' => '', 'permalink' => '', 'overrides' => [] ] ],
+				99999 => [ [ 'id' => 2, 'title' => 'b', 'edit_link' => '', 'permalink' => '', 'overrides' => [] ] ],
+			],
+			false
+		);
+
+		$_GET[ Propagate::DISMISS_QUERY ] = '1';
+		$_GET['bvm_dismiss_variation']    = (string) $mine;
+		$_GET['_wpnonce']                 = wp_create_nonce( Propagate::DISMISS_NONCE );
+		// check_admin_referer reads $_REQUEST.
+		$_REQUEST['_wpnonce'] = $_GET['_wpnonce'];
+		// handle_dismiss ends in exit — intercept the redirect with an
+		// exception so the test survives.
+		$intercept = static function ( $location ) {
+			throw new RuntimeException( 'redirect:' . $location );
+		};
+		add_filter( 'wp_redirect', $intercept );
+		try {
+			Propagate::handle_dismiss();
+			$this->fail( 'Expected the dismiss to redirect.' );
+		} catch ( RuntimeException $e ) {
+			$this->assertStringStartsWith( 'redirect:', $e->getMessage() );
+		} finally {
+			remove_filter( 'wp_redirect', $intercept );
+			unset( $_GET[ Propagate::DISMISS_QUERY ], $_GET['bvm_dismiss_variation'], $_GET['_wpnonce'], $_REQUEST['_wpnonce'] );
+		}
+
+		$left = get_option( Propagate::SKIPPED_OPT );
+		$this->assertArrayNotHasKey( $mine, $left );
+		$this->assertArrayHasKey( 99999, $left );
+	}
+
 	// ─── SEC-8: migration lock ──────────────────────────────────────────────
 
 	public function test_migration_lock_blocks_concurrent_runners(): void {

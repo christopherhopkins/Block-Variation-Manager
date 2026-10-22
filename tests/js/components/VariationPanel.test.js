@@ -73,6 +73,9 @@ function renderPanel( attributes = {}, props = {} ) {
 
 beforeEach( () => {
 	jest.clearAllMocks();
+	// QUA-12: clearAllMocks keeps implementations — getCached stubs set with
+	// mockReturnValue in one test would otherwise leak into the next.
+	storeMock.getCached.mockReset();
 	storeMock.subscribe.mockImplementation( () => () => {} );
 	storeMock.getVersion.mockReturnValue( 0 );
 	storeMock.listForBlockType.mockResolvedValue( LIST );
@@ -287,6 +290,36 @@ describe( 'SourcePanel', () => {
 	} );
 } );
 
+describe( 'panel open states (QUA-13)', () => {
+	it( 'opens the source panel only for linked blocks; Save starts closed', async () => {
+		storeMock.getCached.mockReturnValue( { id: 5, attrs: {} } );
+		renderPanel( { bvmVariationId: 5 } );
+		await waitFor( () =>
+			expect(
+				screen
+					.getByRole( 'button', { name: /Variation source/ } )
+					.getAttribute( 'aria-expanded' )
+			).toBe( 'true' )
+		);
+		expect(
+			screen
+				.getByRole( 'button', { name: 'Save as variation' } )
+				.getAttribute( 'aria-expanded' )
+		).toBe( 'false' );
+	} );
+
+	it( 'keeps the source panel collapsed for unlinked blocks', async () => {
+		renderPanel();
+		await waitFor( () =>
+			expect(
+				screen
+					.getByRole( 'button', { name: 'Variation source' } )
+					.getAttribute( 'aria-expanded' )
+			).toBe( 'false' )
+		);
+	} );
+} );
+
 describe( 'SavePanel', () => {
 	const openSave = async () => {
 		await waitFor( () =>
@@ -339,11 +372,19 @@ describe( 'SavePanel', () => {
 			{ level: 2 },
 			[]
 		);
+		// QUA-14: assert serialize received THE created block (a constant-stub
+		// equality could not detect serializing the wrong thing).
+		expect( serialize ).toHaveBeenCalledWith(
+			expect.objectContaining( {
+				name: 'core/heading',
+				attributes: { level: 2 },
+			} )
+		);
 		expect( storeMock.createVariation ).toHaveBeenCalledWith( {
 			title: 'New hero',
 			blockType: 'core/heading',
 			attrs: { level: 2 },
-			content: serialize(),
+			content: serialize.mock.results[ 0 ].value,
 			innerBlocks: undefined,
 		} );
 		expect( setAttributes ).toHaveBeenCalledWith( {

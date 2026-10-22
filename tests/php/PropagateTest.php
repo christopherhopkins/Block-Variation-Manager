@@ -7,57 +7,18 @@ use BVM\Propagate;
 
 class PropagateTest extends WP_UnitTestCase {
 
-	private function heading_block( array $attrs, string $text, int $level = 3 ): string {
-		$json = empty( $attrs ) ? '' : ' ' . wp_json_encode( $attrs );
-		return sprintf(
-			'<!-- wp:heading%s --><h%2$d class="wp-block-heading">%3$s</h%2$d><!-- /wp:heading -->',
-			$json,
-			$level,
-			$text
-		);
-	}
+	use VariationFixtures;
 
-	/**
-	 * Create a published variation of core/heading (static-save → bake path)
-	 * with its content, meta, and last-propagated snapshot in place — the
-	 * state REST create leaves behind.
-	 */
 	private function create_variation( string $text = 'Original', int $level = 3 ): int {
-		$variation_id = self::factory()->post->create(
-			[
-				'post_type'    => BVM_CPT,
-				'post_status'  => 'publish',
-				'post_title'   => 'Heading variation',
-				'post_content' => $this->heading_block( [ 'level' => $level ], $text, $level ),
-			]
-		);
-		update_post_meta( $variation_id, BVM_META_BLOCK_TYPE, 'core/heading' );
-		// Re-run the sync now that block_type is known (factory saved before
-		// the meta existed) so attrs meta reflects the source block.
-		BVM\CPT::sync_attrs_from_content( $variation_id, get_post( $variation_id ) );
-		Propagate::write_snapshot( $variation_id );
-		return $variation_id;
+		return $this->create_heading_variation( $text, $level );
 	}
 
-	/** An instance post whose heading was inserted from the variation (in sync). */
 	private function create_instance( int $variation_id, array $extra_attrs = [], string $text = 'Original', int $level = 3 ): int {
-		$attrs = array_merge( [ 'level' => $level, 'bvmVariationId' => $variation_id ], $extra_attrs );
-		return self::factory()->post->create(
-			[
-				'post_type'    => 'post',
-				'post_status'  => 'publish',
-				'post_content' => $this->heading_block( $attrs, $text, $level ),
-			]
-		);
+		return $this->create_heading_instance( $variation_id, $extra_attrs, $text, $level );
 	}
 
 	private function update_variation( int $variation_id, string $text, int $level ): void {
-		wp_update_post(
-			[
-				'ID'           => $variation_id,
-				'post_content' => $this->heading_block( [ 'level' => $level ], $text, $level ),
-			]
-		);
+		$this->update_heading_variation( $variation_id, $text, $level );
 	}
 
 	public function test_in_sync_instance_is_rebaked(): void {
