@@ -23,10 +23,10 @@ Track: `code-review_20261021` · Spec: [spec.md](./spec.md)
     - [x] Cluster 2 — Propagate core `1a48189`
     - [x] Cluster 3 — JS source/store `be7dba1` (build/ rebuilt + committed)
     - [x] Cluster 4 — Test quality `292d0ae` (QUA-1 in 1a48189)
-    - [ ] Cluster 5 — E2E: QUA-4, QUA-5, QUA-6, QUA-19, QUA-28
+    - [x] Cluster 5 — E2E (see commit for the two extra hardenings found en route)
     - [x] Cluster 6 — CI/scripts `86c3c01`
     - [x] Cluster 7 — Docs + §9 upkeep `86c3c01` (§9.5/§9.7 extended, NEW §9.20; §10(b) resolved maintainer-approved)
-- [ ] Task: Rebuild + commit `build/` if any `source/` file changed; `php -l` all touched PHP
+- [x] Task: Rebuild + commit `build/` if any `source/` file changed (done in cluster 3); `php -l` all touched PHP (clean)
 - [ ] Task: Phase Verification & Checkpoint (Refer to workflow.md)
 
 ## Phase 4: Finalize
