@@ -56,12 +56,16 @@
 
 ## Phase 4: E2E, docs & release polish
 
-- [ ] Task: Playwright E2E
-  - [ ] Write failing E2E: management-screen tour auto-starts for a fresh
+- [x] Task: Playwright E2E `c583b19`
+  - [x] Write failing E2E: management-screen tour auto-starts for a fresh
         user, completing it prevents re-auto-start after reload, "Start tour"
         relaunches
-  - [ ] Stabilize selectors/fixtures until green (visual baselines only if UI
-        chrome changed)
+  - [x] Stabilize selectors/fixtures until green — the red E2E exposed a real
+        bug (driver.js skips onDestroyed on early dismissal → persistence
+        lost; fixed via onDestroyStarted, §9.21). variation-panels baselines
+        regenerated (new link); tools-listing-row refreshed for environment
+        drift (reproduced with tours disabled); variation-panels-linux.png
+        deleted per §11.1 — regenerate from CI artifacts on next push
 - [ ] Task: Documentation
   - [ ] TECHNICAL.md: tours architecture section + any new §9 invariants
         discovered; README feature blurb
