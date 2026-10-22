@@ -1,0 +1,22 @@
+Task: Per-user tour-state meta (PHP)
+
+Summary: New BVM\Tours registers user meta 'bvm_tours_completed' (object map
+tourId => true) with show_in_rest (additionalProperties boolean schema), a
+sanitize callback (slug-safe keys only, truthy-only entries, MAX_TOURS=16
+cap), and an auth callback restricting writes to the user's own meta. Wired
+into Plugin::init and the plugin loader. No custom REST route: the JS runtime
+writes through core /wp/v2/users/me.
+
+Files:
+- includes/class-tours.php (new)
+- includes/class-plugin.php, block-variation-manager.php (wiring)
+- tests/php/ToursTest.php (new, 6 tests — TDD red confirmed first)
+
+Invariants: §9.1 checked — no PHP-side wp_insert_post/wp_update_post/
+update_post_meta call sites added (core meta-fields controller owns the
+write); audit grep still clean. §9.4–§9.20 not applicable (no variation
+writes, no propagation, no editor-store changes). No new §9 entry warranted:
+additive, isolated feature with no cross-site contract beyond the registered
+sanitize/auth callbacks.
+
+Why: FR-5 — per-user, cross-device persistence of tour completion.
