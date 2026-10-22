@@ -107,6 +107,18 @@ Every FIX/DOCS item above is resolved; commits carry the finding IDs.
 | `982378d` | QUA-4, QUA-5, QUA-6, QUA-19, QUA-28 (+ two hardenings found en route: cookie-jar readiness probe, guide-before-header dismissal) |
 | `86c3c01` | QUA-10, QUA-25 (partial: permissions/timeouts/SHA-pin third-party/pipefail; composer cache + php-job artifacts accepted), SEC-7, COR-12, COR-14, COR-3 (docs), COR-D2 (docs+comment), COR-D3 (docs half), COR-D4, COR-D5, QUA-11 (guide fixed; lint adoption follow-up — `wp-scripts lint-js` crashes on the current dependency tree) |
 
+## CI confirmation (Phase 4, 2026-10-22)
+
+Pushed to `main` (`81c4072..2292683`, then `b26ae6e`). First run surfaced two CI-only issues, fixed in `b26ae6e`:
+
+| Commit | What |
+|---|---|
+| `b26ae6e` | QUA-10 gate refined: `*.map` excluded from the build-freshness diff (source maps differ between the Windows-committed build and CI's Linux build; the shipped JS/CSS/asset.php stays gated). Stale `tools-listing-row-linux.png` baseline (predated the row-actions-hiding rewrite) replaced with the CI-rendered actual. `restCall()` e2e helper now throws on REST errors instead of returning `{ __error }` nobody read — a transient Playground 404 had surfaced as an opaque 60s timeout. |
+
+CI green on `main` at `b26ae6e` (run 39727326578, attempt 2; attempt 1's e2e failed on a transient Playground/Kadence activation hiccup — `kadence-blocks` installs unpinned from wordpress.org, noted as a possible future pin). All seven jobs pass: php-lint, Build+Jest+coverage gate, PHPUnit 8.1/8.3 × WP 6.5/latest, Playwright E2E + visual.
+
+§9 check for `b26ae6e`: CI/test-only change, no `includes/` or `source/` code touched — §9.1/§9.4–§9.7 n/a; no new §9 entry warranted (environment-specific source maps and a stale baseline are one-off operational issues, recorded here).
+
 §9 upkeep: §9.5 extended (matches-current corollary), §9.7 extended (trust-boundary sanitize rule), **new §9.20** (RichTextData normalization). §10 updated: (b) resolved maintainer-approved; COR-2 residual and COR-6 deferral recorded.
 
 COR-2: **fixed (mitigated)** — the single-edit case is absorbed by the matches-current check; the mid-run multi-edit window remains documented in §10.

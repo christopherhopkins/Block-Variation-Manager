@@ -31,6 +31,6 @@ Track: `code-review_20261021` · Spec: [spec.md](./spec.md)
 
 ## Phase 4: Finalize
 
-- [ ] Task: Full suites green locally (Jest, PHPUnit ±multisite, Playwright); §9.1 grep clean; update `review.md` dispositions
-- [ ] Task: Push and confirm CI green on `main`
+- [x] Task: Full suites green locally (Jest, PHPUnit ±multisite, Playwright); §9.1 grep clean; update `review.md` dispositions
+- [x] Task: Push and confirm CI green on `main`
 - [ ] Task: Phase Verification & Checkpoint (Refer to workflow.md)
