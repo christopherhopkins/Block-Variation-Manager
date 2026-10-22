@@ -40,13 +40,13 @@
 
 ## Phase 3: Editor tours
 
-- [ ] Task: Variation panel tour (post editor)
-  - [ ] Write failing Jest tests: "Take the tour" link renders in
+- [x] Task: Variation panel tour (post editor) `5081a5d`
+  - [x] Write failing Jest tests: "Take the tour" link renders in
         VariationPanel, auto-start-once on first panel open with block
         selected, anchor-skip when no variations exist
-  - [ ] Implement steps (save / apply / overrides / detach) + link in
+  - [x] Implement steps (save / apply / overrides / detach) + link in
         `VariationPanel.js`
-  - [ ] Verify tests pass
+  - [x] Verify tests pass
 - [ ] Task: Variation-editor tour (`bvm_variation` post screen)
   - [ ] Write failing Jest tests: auto-start gating on the variation editor,
         link in usage panel
