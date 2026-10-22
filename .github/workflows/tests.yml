@@ -47,7 +47,9 @@ jobs:
       - name: Production build
         run: npm run build
       - name: Committed build/ must match source/ (QUA-10)
-        run: git diff --exit-code build/
+        # Source maps embed environment-specific paths and are excluded —
+        # the gate protects the shipped JS/CSS/asset.php.
+        run: git diff --exit-code -- build ':!build/*.map'
       - name: Jest with coverage thresholds (80%)
         run: npm run test:unit -- --coverage
         env:

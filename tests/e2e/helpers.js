@@ -109,11 +109,19 @@ export async function insertHeading( page, text, attrs = {} ) {
 
 /** apiFetch from the authenticated editor page (nonce included). */
 export async function restCall( page, options ) {
-	return await page.evaluate(
+	const result = await page.evaluate(
 		( opts ) =>
 			window.wp
 				.apiFetch( opts )
 				.catch( ( err ) => ( { __error: err?.message || err?.code } ) ),
 		options
 	);
+	// Fail at the call site: a swallowed REST error otherwise surfaces as an
+	// unrelated 60s waitForFunction timeout further down the test.
+	if ( result && result.__error ) {
+		throw new Error(
+			`REST ${ options.method || 'GET' } ${ options.path } failed: ${ result.__error }`
+		);
+	}
+	return result;
 }
