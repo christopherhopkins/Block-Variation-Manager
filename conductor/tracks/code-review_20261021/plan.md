@@ -5,10 +5,10 @@ Track: `code-review_20261021` · Spec: [spec.md](./spec.md)
 ## Phase 1: Review passes
 
 - [x] Task: Pass 1 — §9 invariant compliance audit (`invariants` skill; every §9 entry vs code; §9.1 slash grep) — all 18 active entries HOLD; 1 finding (INV-1, §9.19 untested)
-- [ ] Task: Pass 2 — Security review (caps, nonces, sanitization/escaping, SQL, REST auth, kses, cron context)
-- [ ] Task: Pass 3 — Correctness/robustness review (logic, races, error handling, edge cases, multisite; incl. aux assets + docs accuracy)
-- [ ] Task: Pass 4 — Code quality review (duplication, dead code, naming, test quality, CI hygiene)
-- [ ] Task: Phase Verification & Checkpoint (Refer to workflow.md)
+- [x] Task: Pass 2 — Security review — 11 raw findings (1 med, 7 low, 3 info); REST caps, escaping, SQL, slashing, cron input explicitly clean
+- [x] Task: Pass 3 — Correctness/robustness review — 16 raw findings + 5 docs-accuracy (3 med); §9.19, slashing, dedupe, parser edges, multisite clean
+- [x] Task: Pass 4 — Code quality review — 31 raw findings (1 high: §9.1 tested on one write path only; 10 med, mostly test-quality)
+- [~] Task: Phase Verification & Checkpoint (Refer to workflow.md)
 
 ## Phase 2: Verification & report
 
