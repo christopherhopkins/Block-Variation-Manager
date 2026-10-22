@@ -22,6 +22,7 @@ Edit once, update everywhere — without losing intentional per-instance customi
 5. **Management screen** — Tools → Block Variations lists variations with source type and usage counts.
 6. **Inserter integration** — variations appear as insertable block variations.
 7. **Playground demo** — one-click WordPress Playground blueprint for trying the plugin with zero install.
+8. **Guided onboarding tours** — intro.js-style walkthroughs (driver.js) of the management screen, the editor's Variation panel, and the variation editor; auto-start once per user, revisitable anytime, completion tracked per user.
 
 ## Current Status
 

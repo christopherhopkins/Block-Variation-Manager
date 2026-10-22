@@ -17,8 +17,15 @@
 
 - **ES modules** in `source/`, built with **webpack** via `@wordpress/scripts` ^30 (`webpack.config.cjs`)
 - `@wordpress/*` packages (block editor components, data stores, HOCs/filters)
+- **driver.js 1.3.6** (MIT, pinned; added 2026-10-22 by track
+  `onboarding-tours_20261022`) — onboarding tour engine behind a declarative
+  wrapper (`source/tours/`); completion state in `bvm_tours_completed` user
+  meta via core `/wp/v2/users/me` (TECHNICAL.md §3.6/§4.7/§9.21)
 - SCSS for editor styles
-- Committed `build/` artifacts (plugin installable straight from GitHub) — JS changes require `npm run build` and committing the regenerated `build/`
+- Committed `build/` artifacts (plugin installable straight from GitHub) — two
+  webpack entries: `entry` (block editor) and `tours-admin` (variations list
+  screen); JS changes require `npm run build` and committing the regenerated
+  `build/`
 
 ## Tooling & Dev Environment
 
