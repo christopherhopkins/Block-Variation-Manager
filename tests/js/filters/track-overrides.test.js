@@ -222,6 +222,56 @@ describe( 'class-pair tracking', () => {
 	} );
 } );
 
+describe( 'type-mismatched links (§9.8 / COR-5)', () => {
+	it( 'neither syncs nor tracks when the block name differs from block_type', () => {
+		records.set( 9, {
+			id: 9,
+			block_type: 'core/paragraph',
+			attrs: { color: 'red' },
+		} );
+		// ProbeEdit renders as a core/heading-shaped block (no name prop in
+		// the probe by default — pass one).
+		const setAttributes = jest.fn();
+		render(
+			<WrappedProbe
+				name="core/heading"
+				attributes={ {
+					bvmVariationId: 9,
+					color: 'stale',
+					bvmOverriddenAttrs: [],
+				} }
+				setAttributes={ setAttributes }
+			/>
+		);
+		// No sync write of the foreign attrs…
+		expect( setAttributes ).not.toHaveBeenCalled();
+		// …and user edits pass through untracked.
+		act( () => innerProps.setAttributes( { color: 'blue' } ) );
+		expect( setAttributes ).toHaveBeenCalledWith( { color: 'blue' } );
+	} );
+
+	it( 'matching names keep syncing as before', () => {
+		records.set( 9, {
+			id: 9,
+			block_type: 'core/heading',
+			attrs: { color: 'red' },
+		} );
+		const setAttributes = jest.fn();
+		render(
+			<WrappedProbe
+				name="core/heading"
+				attributes={ {
+					bvmVariationId: 9,
+					color: 'stale',
+					bvmOverriddenAttrs: [],
+				} }
+				setAttributes={ setAttributes }
+			/>
+		);
+		expect( setAttributes ).toHaveBeenCalledWith( { color: 'red' } );
+	} );
+} );
+
 describe( 'record still loading', () => {
 	it( 'marks conservatively while the record is undefined', () => {
 		// id 7 never enters the record map → getCached returns undefined.

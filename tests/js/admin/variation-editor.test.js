@@ -18,11 +18,13 @@ jest.mock( '../../../source/lib/variation-store.js', () => ( {
 function boot( ctx ) {
 	window.BVM = ctx;
 	let data;
+	let blocks;
 	let chrome;
 	let orientation;
 	let store;
 	jest.isolateModules( () => {
 		data = require( '@wordpress/data' );
+		blocks = require( '@wordpress/blocks' );
 		chrome = require( '../../../source/admin/strip-post-chrome.js' );
 		orientation = require( '../../../source/admin/orientation.js' );
 		store = require( '../../../source/lib/variation-store.js' );
@@ -30,6 +32,7 @@ function boot( ctx ) {
 	} );
 	return {
 		data,
+		blocks,
 		chrome,
 		orientation,
 		store,
@@ -153,6 +156,20 @@ describe( 'variation-editor boot', () => {
 			} );
 			enforce();
 			expect( resetBlocks ).toHaveBeenCalledWith( [ first ] );
+		} );
+
+		it( 'leaves everything alone when the chain is unregistered (COR-10)', () => {
+			const { data, blocks, enforce } = boot( CTX );
+			// The variation's plugin is deactivated: the root type no longer
+			// exists, so enforcement must bail instead of createBlock-throwing
+			// inside the data subscriber.
+			blocks.getBlockType.mockReturnValue( undefined );
+			const resetBlocks = jest.fn();
+			data.dispatch.mockReturnValue( { resetBlocks } );
+			mockStores( data, { blockEditor: { getBlocks: () => [] } } );
+			expect( () => enforce() ).not.toThrow();
+			expect( resetBlocks ).not.toHaveBeenCalled();
+			expect( blocks.createBlock ).not.toHaveBeenCalled();
 		} );
 
 		it( 'leaves a single correct root alone', () => {

@@ -18,7 +18,7 @@
  */
 
 import { dispatch, select, subscribe } from '@wordpress/data';
-import { createBlock } from '@wordpress/blocks';
+import { createBlock, getBlockType } from '@wordpress/blocks';
 import domReady from '@wordpress/dom-ready';
 import { dispatchOrientationNotice } from './orientation.js';
 import { applyVariationEditorChrome } from './strip-post-chrome.js';
@@ -101,6 +101,13 @@ function initVariationEditor( blockType ) {
 			? ctx.variationRootChain
 			: [ blockType ];
 	const expectedRoot = chain[ 0 ];
+	// COR-10: if the variation's block type (or a wrapper) isn't registered —
+	// its plugin was deactivated — createBlock() would THROW inside this
+	// @wordpress/data subscriber, i.e. inside every dispatch, breaking the
+	// whole editor. Leave the content alone instead (it parses as
+	// core/missing and the user sees WordPress's own recovery UI).
+	const chainRegistered = () =>
+		chain.every( ( name ) => !! getBlockType( name ) );
 	const seedChain = () =>
 		chain.reduceRight(
 			( inner, name ) => [ createBlock( name, {}, inner ) ],
@@ -131,6 +138,10 @@ function initVariationEditor( blockType ) {
 		}
 
 		const blocks = blockEditor.getBlocks();
+
+		if ( ! chainRegistered() ) {
+			return;
+		}
 
 		// Re-seed an empty editor. Happens on first load of a brand-new
 		// variation, and also if the user somehow deletes the root block.

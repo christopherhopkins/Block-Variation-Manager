@@ -1,12 +1,6 @@
 import { addFilter } from '@wordpress/hooks';
 import { createHigherOrderComponent } from '@wordpress/compose';
-import {
-	useSyncExternalStore,
-	useMemo,
-	useCallback,
-	useEffect,
-	useRef,
-} from '@wordpress/element';
+import { useMemo, useCallback, useEffect, useRef } from '@wordpress/element';
 import {
 	BVM_ATTR_VARIATION_ID,
 	BVM_ATTR_OVERRIDES,
@@ -14,11 +8,7 @@ import {
 } from '../constants.js';
 import { deepEqual } from '../lib/equality.js';
 import { kadenceClassPair } from '../lib/class-pairs.js';
-import {
-	subscribe,
-	getCached,
-	ensureVariationLoaded,
-} from '../lib/variation-store.js';
+import { useVariationSnapshot } from '../lib/use-variation.js';
 
 /**
  * Wraps every block's Edit component to:
@@ -46,19 +36,6 @@ import {
  *   variation has genuinely changed since the post was last saved, the user
  *   should save to persist the updated values.
  */
-function useVariation( variationId ) {
-	useEffect( () => {
-		if ( variationId ) {
-			ensureVariationLoaded( variationId );
-		}
-	}, [ variationId ] );
-
-	return useSyncExternalStore(
-		subscribe,
-		() => ( variationId ? getCached( variationId ) : null )
-	);
-}
-
 function arraysEqual( a, b ) {
 	if ( a.length !== b.length ) return false;
 	for ( let i = 0; i < a.length; i++ ) {
@@ -77,7 +54,16 @@ const withVariationOverrides = createHigherOrderComponent( ( BlockEdit ) => {
 		const { attributes, setAttributes } = props;
 		const variationId = attributes?.[ BVM_ATTR_VARIATION_ID ] || 0;
 		// undefined = record still loading; null = confirmed missing.
-		const variation = useVariation( variationId );
+		const record = useVariationSnapshot( variationId );
+		// §9.8 (COR-5): a link only counts when the block's name matches the
+		// variation's block_type — the render merge and Propagate::walk both
+		// enforce this, so the editor sync must too, or a retyped/hand-edited
+		// link gets foreign preset attrs written into the store.
+		const typeMismatch =
+			record != null &&
+			typeof record.block_type === 'string' &&
+			record.block_type !== props.name;
+		const variation = typeMismatch ? null : record;
 		const variationAttrs = variation?.attrs ?? EMPTY_ATTRS;
 		const overriddenList = useMemo(
 			() => (

@@ -432,6 +432,22 @@ describe( 'SavePanel', () => {
 		expect( editorDispatch.savePost ).toHaveBeenCalled();
 	} );
 
+	it( 'aborts the save with an error when the registry is unavailable (COR-4)', async () => {
+		registryMock.ensureRegistryLoaded.mockResolvedValue( null );
+		renderPanel( { level: 2 } );
+		await openSave();
+		fireEvent.change( screen.getByPlaceholderText( 'e.g. Brand hero' ), {
+			target: { value: 'No registry' },
+		} );
+		await act( async () => {
+			fireEvent.click( screen.getByText( 'Save variation' ) );
+		} );
+		expect( storeMock.createVariation ).not.toHaveBeenCalled();
+		expect(
+			screen.getByText( /Could not load the block registry/ )
+		).toBeTruthy();
+	} );
+
 	it( 'surfaces save errors', async () => {
 		storeMock.createVariation.mockRejectedValue(
 			new Error( 'duplicate key' )

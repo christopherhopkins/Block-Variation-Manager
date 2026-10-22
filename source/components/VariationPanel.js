@@ -27,10 +27,10 @@ import {
 	subscribe,
 	listForBlockType,
 	createVariation,
-	getCached,
 	getVersion,
 	ensureVariationLoaded,
 } from '../lib/variation-store.js';
+import { useVariationSnapshot } from '../lib/use-variation.js';
 import { kadenceClassPair, pairBaseKey } from '../lib/class-pairs.js';
 import {
 	ensureRegistryLoaded,
@@ -69,16 +69,6 @@ function useVariationsForBlock( blockName ) {
 	}, [ blockName, tick ] );
 
 	return { list, error };
-}
-
-function useVariationSnapshot( variationId ) {
-	useEffect( () => {
-		ensureVariationLoaded( variationId );
-	}, [ variationId ] );
-	return useSyncExternalStore(
-		subscribe,
-		() => ( variationId ? getCached( variationId ) : null )
-	);
 }
 
 /**
@@ -244,43 +234,40 @@ function SourcePanel( {
 	};
 
 	/**
+	 * Build the setAttributes payload that clears the given override keys and
+	 * restores each one the variation actually defines (shared by the single
+	 * chip and Reset-all — QUA-20).
+	 */
+	const restoreFromVariation = ( keysToClear ) => {
+		const clear  = new Set( keysToClear );
+		const update = {
+			[ BVM_ATTR_OVERRIDES ]: overrides.filter( ( k ) => ! clear.has( k ) ),
+		};
+		for ( const k of clear ) {
+			if (
+				Object.prototype.hasOwnProperty.call( activeVariation.attrs, k )
+			) {
+				update[ k ] = activeVariation.attrs[ k ];
+			}
+		}
+		return update;
+	};
+
+	/**
 	 * Reset a single override chip. The chip is keyed by the base-name
 	 * (pair-collapsed), so we always remove both halves of a class-pair and
 	 * restore both sides from the variation.
 	 */
 	const onResetAttr = ( baseKey ) => {
 		if ( ! activeVariation ) return;
-		const pair = kadenceClassPair( baseKey );
-		const toRemove = new Set( [ baseKey, pair ] );
-		const next = overrides.filter( ( k ) => ! toRemove.has( k ) );
-		const update = { [ BVM_ATTR_OVERRIDES ]: next };
-		for ( const k of toRemove ) {
-			if (
-				Object.prototype.hasOwnProperty.call(
-					activeVariation.attrs,
-					k
-				)
-			) {
-				update[ k ] = activeVariation.attrs[ k ];
-			}
-		}
-		setAttributes( update );
+		setAttributes(
+			restoreFromVariation( [ baseKey, kadenceClassPair( baseKey ) ] )
+		);
 	};
 
 	const onResetAll = () => {
 		if ( ! activeVariation ) return;
-		const update = { [ BVM_ATTR_OVERRIDES ]: [] };
-		for ( const key of overrides ) {
-			if (
-				Object.prototype.hasOwnProperty.call(
-					activeVariation.attrs,
-					key
-				)
-			) {
-				update[ key ] = activeVariation.attrs[ key ];
-			}
-		}
-		setAttributes( update );
+		setAttributes( restoreFromVariation( overrides ) );
 		noticeSuccess(
 			__(
 				'Reset all overrides to the variation.',
@@ -397,11 +384,7 @@ function SourcePanel( {
 			{ variationId > 0 && (
 				<Flex gap={ 2 } wrap style={ { marginTop: 12 } } justify="flex-start">
 					<FlexItem>
-						<Button
-							variant="secondary"
-							onClick={ onEditSource }
-							disabled={ ! variationId }
-						>
+						<Button variant="secondary" onClick={ onEditSource }>
 							{ __( 'Edit source', 'block-variation-manager' ) }
 						</Button>
 					</FlexItem>
@@ -531,7 +514,19 @@ function SavePanel( { attributes, setAttributes, name, clientId, list } ) {
 			// following a failed fetch) would silently skip child capture
 			// and create a parent-block variation with no children. Await
 			// resolution — instant once cached, retried after failures.
-			await ensureRegistryLoaded();
+			// COR-4: a null resolution means the fetch FAILED — saving anyway
+			// would silently create exactly that childless variation, so
+			// surface it instead.
+			const registry = await ensureRegistryLoaded();
+			if ( null === registry || undefined === registry ) {
+				setSaveError(
+					__(
+						'Could not load the block registry — try saving again.',
+						'block-variation-manager'
+					)
+				);
+				return;
+			}
 
 			// Capture the full live inner-block tree if the registry says
 			// this block has required children (e.g. kadence/advancedbtn

@@ -95,16 +95,24 @@ export async function listForBlockType( blockType ) {
 		),
 	} )
 		.then( ( data ) => {
-			listCache.set( blockType, data );
+			// Only a fetch that is still the registered in-flight request may
+			// populate the cache: invalidateList() during the request means
+			// this response predates the invalidation (COR-9) — a just-created
+			// variation would otherwise vanish from the Apply dropdown.
+			if ( inflightLists.get( blockType ) === promise ) {
+				listCache.set( blockType, data );
+				inflightLists.delete( blockType );
+			}
 			for ( const variation of data ) {
 				cache.set( variation.id, variation );
 			}
-			inflightLists.delete( blockType );
 			notify();
 			return data;
 		} )
 		.catch( ( err ) => {
-			inflightLists.delete( blockType );
+			if ( inflightLists.get( blockType ) === promise ) {
+				inflightLists.delete( blockType );
+			}
 			throw err;
 		} );
 	inflightLists.set( blockType, promise );
@@ -122,8 +130,12 @@ export async function listInstances( variationId ) {
 export function invalidateList( blockType ) {
 	if ( blockType ) {
 		listCache.delete( blockType );
+		// Orphan any in-flight fetch too (COR-9): its response predates the
+		// invalidation and must not repopulate the cache.
+		inflightLists.delete( blockType );
 	} else {
 		listCache.clear();
+		inflightLists.clear();
 	}
 	notify();
 }

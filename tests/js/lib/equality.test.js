@@ -67,4 +67,38 @@ describe( 'deepEqual', () => {
 		const obj = { a: [ 1, { b: 2 } ] };
 		expect( deepEqual( obj, obj ) ).toBe( true );
 	} );
+
+	// COR-11: WP 6.5+ hands rich-text attrs to the editor as RichTextData
+	// objects while the variation preset stores strings — they must compare
+	// by their HTML string, or every open rewrites identical text.
+	describe( 'RichTextData normalization', () => {
+		const richText = ( html ) => ( {
+			toHTMLString: () => html,
+			toString: () => html,
+		} );
+
+		it( 'treats RichTextData equal to its serialized string', () => {
+			expect( deepEqual( richText( 'Hello <em>x</em>' ), 'Hello <em>x</em>' ) ).toBe( true );
+			expect( deepEqual( 'Hello <em>x</em>', richText( 'Hello <em>x</em>' ) ) ).toBe( true );
+		} );
+
+		it( 'still detects real text differences', () => {
+			expect( deepEqual( richText( 'Hello' ), 'Goodbye' ) ).toBe( false );
+		} );
+
+		it( 'compares two RichTextData values by content', () => {
+			expect( deepEqual( richText( 'same' ), richText( 'same' ) ) ).toBe( true );
+			expect( deepEqual( richText( 'a' ), richText( 'b' ) ) ).toBe( false );
+		} );
+
+		it( 'normalizes nested values inside attribute objects', () => {
+			expect(
+				deepEqual( { content: richText( 'deep' ) }, { content: 'deep' } )
+			).toBe( true );
+		} );
+
+		it( 'does not coerce unrelated objects', () => {
+			expect( deepEqual( { toString: () => 'x' }, 'x' ) ).toBe( false );
+		} );
+	} );
 } );

@@ -7,10 +7,8 @@
  * two can never disagree about what constitutes a pair.
  */
 export function kadenceClassPair( key ) {
-	if ( key.endsWith( 'Class' ) && key.length > 5 ) {
-		return key.slice( 0, -5 );
-	}
-	return key + 'Class';
+	const base = pairBaseKey( key );
+	return base === key ? key + 'Class' : base;
 }
 
 /** Base key for a class-pair — strips the `Class` suffix when present. */

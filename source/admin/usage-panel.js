@@ -11,7 +11,9 @@ import {
 import { listInstances } from '../lib/variation-store.js';
 import { ORIENTATION_STORAGE_KEY, dispatchOrientationNotice } from './orientation.js';
 
-const VARIATION_CPT = 'bvm_variation';
+// QUA-22: the post type is localized by Assets — the literal is only a
+// fallback for test/storybook contexts without the BVM global.
+const VARIATION_CPT = window.BVM?.cpt ?? 'bvm_variation';
 
 function UsagePanel() {
 	const postId = useSelect(

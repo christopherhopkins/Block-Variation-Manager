@@ -164,6 +164,28 @@ describe( 'variation-store', () => {
 			expect( mockApiFetch ).toHaveBeenCalledTimes( 5 );
 		} );
 
+		it( 'does not let a stale in-flight fetch repopulate an invalidated list (COR-9)', async () => {
+			let resolveStale;
+			mockApiFetch.mockReturnValueOnce(
+				new Promise( ( r ) => {
+					resolveStale = r;
+				} )
+			);
+			const { listForBlockType, invalidateList } = loadStore();
+
+			const stale = listForBlockType( 'core/heading' ); // in flight
+			invalidateList( 'core/heading' ); // e.g. createVariation finished
+
+			const fresh = [ { id: 99, attrs: {}, title: 'New one' } ];
+			mockApiFetch.mockResolvedValueOnce( fresh );
+			resolveStale( [] ); // the pre-invalidation response arrives late
+			await stale;
+
+			// The next read must refetch, not serve the stale empty list.
+			expect( await listForBlockType( 'core/heading' ) ).toEqual( fresh );
+			expect( mockApiFetch ).toHaveBeenCalledTimes( 2 );
+		} );
+
 		it( 'does not cache a failed list fetch', async () => {
 			mockApiFetch.mockRejectedValueOnce( new Error( 'boom' ) );
 			mockApiFetch.mockResolvedValueOnce( [] );
