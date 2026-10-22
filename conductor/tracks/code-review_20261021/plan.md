@@ -8,11 +8,11 @@ Track: `code-review_20261021` · Spec: [spec.md](./spec.md)
 - [x] Task: Pass 2 — Security review — 11 raw findings (1 med, 7 low, 3 info); REST caps, escaping, SQL, slashing, cron input explicitly clean
 - [x] Task: Pass 3 — Correctness/robustness review — 16 raw findings + 5 docs-accuracy (3 med); §9.19, slashing, dedupe, parser edges, multisite clean
 - [x] Task: Pass 4 — Code quality review — 31 raw findings (1 high: §9.1 tested on one write path only; 10 med, mostly test-quality)
-- [~] Task: Phase Verification & Checkpoint (Refer to workflow.md)
+- [x] Task: Phase Verification & Checkpoint (Refer to workflow.md) — user confirmed 2026-10-21
 
 ## Phase 2: Verification & report
 
-- [ ] Task: Adversarially verify every raw finding against the code; drop/downgrade what doesn't hold
+- [~] Task: Adversarially verify every raw finding against the code; drop/downgrade what doesn't hold
 - [ ] Task: Write `review.md` (severity-ranked, file:line, rule violated, disposition) and link it from the track index
 - [ ] Task: Phase Verification & Checkpoint (Refer to workflow.md)
 
