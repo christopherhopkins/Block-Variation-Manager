@@ -54,7 +54,7 @@
   - [x] Verify tests pass; rebuild + commit `build/`
 - [x] Task: Phase Verification & Checkpoint (Refer to workflow.md)
 
-## Phase 4: E2E, docs & release polish
+## Phase 4: E2E, docs & release polish [checkpoint: af39a60]
 
 - [x] Task: Playwright E2E `c583b19`
   - [x] Write failing E2E: management-screen tour auto-starts for a fresh
@@ -69,4 +69,4 @@
 - [x] Task: Documentation `af39a60`
   - [x] TECHNICAL.md: tours architecture section (§3.6, §4.7, file tables) +
         new §9.21 invariant (landed with `c583b19`); README feature blurb
-- [ ] Task: Phase Verification & Checkpoint (Refer to workflow.md)
+- [x] Task: Phase Verification & Checkpoint (Refer to workflow.md)
