@@ -66,7 +66,7 @@
         regenerated (new link); tools-listing-row refreshed for environment
         drift (reproduced with tours disabled); variation-panels-linux.png
         deleted per §11.1 — regenerate from CI artifacts on next push
-- [ ] Task: Documentation
-  - [ ] TECHNICAL.md: tours architecture section + any new §9 invariants
-        discovered; README feature blurb
+- [x] Task: Documentation `af39a60`
+  - [x] TECHNICAL.md: tours architecture section (§3.6, §4.7, file tables) +
+        new §9.21 invariant (landed with `c583b19`); README feature blurb
 - [ ] Task: Phase Verification & Checkpoint (Refer to workflow.md)
