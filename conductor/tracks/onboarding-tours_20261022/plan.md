@@ -1,6 +1,6 @@
 # Implementation Plan: Interactive Onboarding Tours
 
-## Phase 1: Foundation — tour engine wrapper & persistence
+## Phase 1: Foundation — tour engine wrapper & persistence [checkpoint: ff6824a]
 
 - [x] Task: Tour wrapper module (`source/tours/`) `3db6fc5`
   - [x] Write failing Jest tests: step-list normalization, missing-anchor
@@ -24,7 +24,7 @@
         not an installed package in this repo — api-fetch is the established
         pattern)
   - [x] Verify tests pass
-- [ ] Task: Phase Verification & Checkpoint (Refer to workflow.md)
+- [x] Task: Phase Verification & Checkpoint (Refer to workflow.md)
 
 ## Phase 2: Management-screen tour
 
