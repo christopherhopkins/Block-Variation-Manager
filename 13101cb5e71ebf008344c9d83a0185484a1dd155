@@ -1,0 +1,4 @@
+Phase Verification Report — review Phase 3: fixes
+Automated: Jest 153, PHPUnit 115 single-site + multisite, Playwright 10/10, §9.1 grep clean.
+Deviations surfaced: §10(b) implemented via COR-1 (maintainer-approved at the checkpoint), SEC-4 refuted en route.
+User confirmation: 'Yes, Phase 3 verified including the §10(b) change — checkpoint it and run Phase 4 (push + CI green).' / 'Push to main and watch the CI' (2026-10-22)
