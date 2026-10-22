@@ -5,6 +5,7 @@ module.exports = {
 	...defaultConfig,
 	entry: {
 		entry: path.resolve( __dirname, 'source/entry.js' ),
+		'tours-admin': path.resolve( __dirname, 'source/tours/admin.js' ),
 	},
 	output: {
 		...defaultConfig.output,

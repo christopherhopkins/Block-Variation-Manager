@@ -26,6 +26,55 @@ class Tours {
 
 	public static function init(): void {
 		add_action( 'init', [ self::class, 'register_meta' ] );
+		add_action( 'admin_enqueue_scripts', [ self::class, 'enqueue_admin' ] );
+	}
+
+	/**
+	 * Enqueue the management-screen tour bundle on the variations list
+	 * screen only, seeding it with the current user's completion map so the
+	 * runtime needs no read request.
+	 */
+	public static function enqueue_admin(): void {
+		$screen = function_exists( 'get_current_screen' ) ? get_current_screen() : null;
+		if ( ! $screen || 'edit-' . BVM_CPT !== $screen->id ) {
+			return;
+		}
+
+		$asset_file = BVM_DIR . 'build/tours-admin.asset.php';
+		if ( ! file_exists( $asset_file ) ) {
+			return;
+		}
+		$asset = include $asset_file;
+		if ( ! is_array( $asset ) ) {
+			return;
+		}
+
+		wp_enqueue_script(
+			'bvm-tours-admin',
+			BVM_URL . 'build/tours-admin.js',
+			$asset['dependencies'] ?? [],
+			$asset['version'] ?? null,
+			[ 'in_footer' => true ]
+		);
+		wp_set_script_translations( 'bvm-tours-admin', 'block-variation-manager' );
+
+		$completed = get_user_meta( get_current_user_id(), self::META_KEY, true );
+		wp_localize_script(
+			'bvm-tours-admin',
+			'BVMTours',
+			[
+				'completed' => is_array( $completed ) ? (object) $completed : new \stdClass(),
+			]
+		);
+
+		if ( file_exists( BVM_DIR . 'build/tours-admin.css' ) ) {
+			wp_enqueue_style(
+				'bvm-tours-admin',
+				BVM_URL . 'build/tours-admin.css',
+				[],
+				$asset['version'] ?? null
+			);
+		}
 	}
 
 	public static function register_meta(): void {

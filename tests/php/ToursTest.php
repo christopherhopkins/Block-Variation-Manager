@@ -96,6 +96,33 @@ class ToursTest extends WP_UnitTestCase {
 		);
 	}
 
+	public function test_admin_assets_enqueued_on_variation_list_screen(): void {
+		$editor = self::factory()->user->create( [ 'role' => 'editor' ] );
+		wp_set_current_user( $editor );
+		update_user_meta( $editor, Tours::META_KEY, [ 'management' => true ] );
+
+		set_current_screen( 'edit-' . BVM_CPT );
+		Tours::enqueue_admin();
+
+		$this->assertTrue( wp_script_is( 'bvm-tours-admin', 'enqueued' ) );
+		$this->assertTrue( wp_style_is( 'bvm-tours-admin', 'enqueued' ) );
+
+		$data = wp_scripts()->get_data( 'bvm-tours-admin', 'data' );
+		$this->assertStringContainsString( '"management":true', $data );
+
+		wp_dequeue_script( 'bvm-tours-admin' );
+		wp_dequeue_style( 'bvm-tours-admin' );
+	}
+
+	public function test_admin_assets_not_enqueued_on_other_screens(): void {
+		wp_set_current_user(
+			self::factory()->user->create( [ 'role' => 'editor' ] )
+		);
+		set_current_screen( 'edit-post' );
+		Tours::enqueue_admin();
+		$this->assertFalse( wp_script_is( 'bvm-tours-admin', 'enqueued' ) );
+	}
+
 	public function test_rest_write_is_sanitized(): void {
 		$editor = self::factory()->user->create( [ 'role' => 'editor' ] );
 		wp_set_current_user( $editor );

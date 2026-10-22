@@ -57,6 +57,7 @@ export function createTour( { steps, onFinish } ) {
 	}
 	return driver( {
 		steps: resolved,
+		popoverClass: 'bvm-tour',
 		showProgress: true,
 		animate: ! prefersReducedMotion(),
 		onDestroyed: () => onFinish?.(),
