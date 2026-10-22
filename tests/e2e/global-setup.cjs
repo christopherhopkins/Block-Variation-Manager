@@ -117,6 +117,45 @@ module.exports = async ( config ) => {
 		await browser.close();
 		throw new Error( 'Could not establish an authenticated admin session' );
 	}
+	// 3. Pre-complete every onboarding tour for the shared admin: an
+	// auto-started tour overlay would otherwise intercept clicks and pollute
+	// visual baselines in unrelated specs. tours.spec.js resets this state
+	// itself to test the fresh-user auto-start (and restores it afterwards).
+	await page
+		.goto( '/wp-admin/edit.php?post_type=bvm_variation', {
+			timeout: 120_000,
+		} )
+		.catch( () => {} );
+	const seeded = await page
+		.waitForFunction( () => !! window.wp?.apiFetch, null, {
+			timeout: 30_000,
+		} )
+		.then( () =>
+			page.evaluate( () =>
+				window.wp.apiFetch( {
+					path: '/wp/v2/users/me',
+					method: 'POST',
+					data: {
+						meta: {
+							bvm_tours_completed: {
+								management: true,
+								'editor-panel': true,
+								'variation-editor': true,
+							},
+						},
+					},
+				} )
+			)
+		)
+		.then(
+			() => true,
+			() => false
+		);
+	if ( ! seeded ) {
+		await browser.close();
+		throw new Error( 'Could not pre-complete onboarding tours' );
+	}
+
 	await page.context().storageState( { path: STATE_PATH } );
 	await browser.close();
 };

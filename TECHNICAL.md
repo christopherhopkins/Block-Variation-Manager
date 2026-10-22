@@ -156,6 +156,18 @@ These are full-table scans by design (unindexable leading-wildcard LIKE);
 they are confined to admin/REST/cron paths — never call them during frontend
 rendering.
 
+### 3.6 User meta (onboarding tours)
+
+| Key | Type | Written by | Read by |
+|---|---|---|---|
+| `bvm_tours_completed` (`Tours::META_KEY`) | object map `{ tourId: true }` | The JS tour runtime through core `POST /wp/v2/users/me` (no PHP write path) | `Tours::enqueue_admin` / `Assets::enqueue_editor` localize the current user's map |
+
+Registered by `Tours::register_meta()` with `show_in_rest` (schema:
+`additionalProperties: boolean`), a sanitize callback (slug-safe keys,
+truthy-only, `MAX_TOURS` cap) and an auth callback restricting writes to the
+user's own meta. The value is an array of booleans — WP-serialized, not a
+JSON string — so §9.1 slashing has no call site here.
+
 ---
 
 ## 4. Runtime flows
@@ -322,6 +334,27 @@ Server-side readers (`CPT::find_block`, `Propagate::extract_source_block`)
 see *through* wrappers by searching for the block **by name**; the
 root-fallback path is only taken for root-capable types.
 
+### 4.7 Onboarding tours
+
+Three driver.js guided tours (`source/tours/`), auto-started **once per user
+per surface** and relaunchable at will:
+
+| Tour id | Surface | Auto-start gate | Relaunch |
+|---|---|---|---|
+| `management` | Tools → Block Variations list (`tours-admin` bundle) | dom-ready on that screen | "Start tour" page-title button |
+| `editor-panel` | Variation panel, any post editor | 600 ms after `VariationPanel` mounts AND `.bvm-variation-source-panel` is in the DOM | "Take the tour" link in the source panel |
+| `variation-editor` | `bvm_variation` edit screen | 600 ms after `UsagePanel` mounts AND `BVM.isVariationEditor` AND `.bvm-usage-panel` in the DOM | "Take the tour" link in the Usage panel |
+
+Flow: `engine.js` resolves declarative steps against the DOM (missing anchors
+are skipped; element-less steps render centered), disables animation under
+`prefers-reduced-motion`, and tags popovers `bvm-tour` (skinned in
+`tour.scss`). `state.js` keeps the completion map — seeded from the localized
+value once per page load, optimistically updated, persisted via core
+`POST /wp/v2/users/me` (§3.6). Finishing **or dismissing** a tour counts as
+completed; manual relaunch ignores completion. E2E keeps the shared admin's
+tours pre-completed (`tests/e2e/global-setup.cjs`) so overlays never leak
+into other specs; `tours.spec.js` resets and restores that state.
+
 ---
 
 ## 5. File-by-file reference
@@ -339,12 +372,14 @@ root-fallback path is only taken for root-capable types.
 | `class-assets.php` | `Assets` | Enqueues `build/entry.js`/`.css`, localizes `window.BVM` (see below), seeds the variation editor's root template from the wrapper chain. |
 | `class-block-registry.php` | `BlockRegistry` | Parent/child policy derived from the WP block registry: `parent_of`, `wrapper_chain`, `required_children` map (block.json `parent` pass + the `DEFAULT_REQUIRED_CHILDREN` vendor seed, e.g. kadence/rowlayout → kadence/column), `/registry` REST route (filter `bvm/block_policy`, only non-empty entries returned). |
 | `class-propagate.php` | `Propagate` | The cron engine (§4.3), snapshot read/write, safe instance writes, skipped-option storage, admin notice + dismiss handling. |
+| `class-tours.php` | `Tours` | Onboarding-tour state (§3.6/§4.7): registers the `bvm_tours_completed` user meta for REST, enqueues + seeds the `tours-admin` bundle on the variations list screen. |
 | `class-plugin.php` | `Plugin` | `::init()` fans out to every class's `init()`. |
 
 ### `window.BVM` (localized by Assets on every block-editor screen)
 
 ```
 restNamespace        'bvm/v1'
+toursCompleted       { tourId: true } — current user's tour state (§4.7)
 cpt                  'bvm_variation'
 adminUrl             admin post.php URL (Edit source button)
 variationListUrl     Tools → Block Variations URL (back link)
@@ -354,7 +389,10 @@ variationRootChain   wrapper chain, outermost first ([] elsewhere)
 variationUsageCount  instance count for the orientation banner
 ```
 
-### JavaScript (`source/`, bundled from `entry.js`)
+(The variations list screen instead gets `window.BVMTours = { completed }`,
+localized by `Tours::enqueue_admin` for the `tours-admin` bundle.)
+
+### JavaScript (`source/`, two webpack entries: `entry.js` for the block editor, `tours/admin.js` as `tours-admin` for the variations list screen)
 
 | Module | Responsibility |
 |---|---|
@@ -371,8 +409,13 @@ variationUsageCount  instance count for the orientation banner
 | `components/VariationPanel.js` | SourcePanel (apply/rebind/unlink/override chips/reset) + SavePanel (create). |
 | `admin/variation-editor.js` | Variation-screen orchestration: chrome, root enforcement, post-save attrs sync, orientation banner. |
 | `admin/strip-post-chrome.js` | Removes irrelevant document panels; retargets the back link (self-disconnecting, 10 s-capped MutationObserver). Title placeholder is PHP-side (`enter_title_here`). |
-| `admin/usage-panel.js` | Document sidebar Usage panel (instances list via REST). |
+| `admin/usage-panel.js` | Document sidebar Usage panel (instances list via REST); schedules/relaunches the variation-editor tour. |
 | `admin/orientation.js` | Dismissible orientation notice (localStorage-persisted). |
+| `tours/engine.js` | Declarative wrapper around driver.js: DOM-gated step resolution, reduced-motion, `bvm-tour` popover class. |
+| `tours/state.js` | Per-user completion map: localized seed, optimistic `markCompleted`, persistence via core `users/me`, auto-start gating. |
+| `tours/editor.js` | The `editor-panel` and `variation-editor` tour definitions + DOM-gated auto-starts (§4.7). |
+| `tours/admin.js` | `tours-admin` entry: the `management` tour + "Start tour" button on the variations list screen. |
+| `tours/tour.scss` | wp-admin skin for driver.js popovers. |
 
 ---
 
@@ -702,6 +745,26 @@ which silently (a) rewrote identical text into the store on every post open
 overrides impossible to un-mark, since the "set back to variation value"
 check could never match. Route every new editor-side attr comparison through
 `deepEqual`, never `===`/`JSON.stringify` on possibly-rich values.
+
+### 9.21 driver.js completion must hook `onDestroyStarted`, never `onDestroyed`
+
+driver.js fires `onDestroyed` only when `__activeElement`/`__activeStep` are
+set — i.e. after the step's highlight transition has completed. Dismissing a
+tour during the opening animation (Esc, ✕, overlay click within the first
+~400 ms — exactly what an E2E click does) destroys the popover but silently
+skips `onDestroyed`. Completion wired there is therefore lost: the tour
+auto-starts again on every page load for fast users, and the E2E persistence
+assertion fails while manual testing (which dismisses late) passes. Hook
+"user finished or dismissed" logic on `onDestroyStarted` (which fires on
+every user-initiated destroy) and call `driver.destroy()` from inside it —
+the public `destroy()` bypasses the hook, so there is no recursion. The sole
+wiring site is `createTour()` in `source/tours/engine.js`; any new driver.js
+call site must follow it. Audit:
+
+```bash
+grep -rn "onDestroyed" source/
+# must return nothing
+```
 
 ---
 

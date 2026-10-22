@@ -128,16 +128,22 @@ describe( 'createTour', () => {
 		);
 	} );
 
-	it( 'fires onFinish when the tour is destroyed (finished or dismissed)', () => {
+	it( 'fires onFinish and destroys via onDestroyStarted (§9.21)', () => {
 		const onFinish = jest.fn();
 		createTour( {
 			steps: [ { title: 'Welcome', description: 'Intro.' } ],
 			onFinish,
 		} );
 		const config = driver.mock.calls[ 0 ][ 0 ];
-		expect( config.onDestroyed ).toEqual( expect.any( Function ) );
-		config.onDestroyed();
+		// onDestroyed is transition-gated in driver.js — an early dismissal
+		// would skip it, so completion must NOT be wired through it.
+		expect( config.onDestroyed ).toBeUndefined();
+		expect( config.onDestroyStarted ).toEqual( expect.any( Function ) );
+
+		const instance = { destroy: jest.fn() };
+		config.onDestroyStarted( undefined, undefined, { driver: instance } );
 		expect( onFinish ).toHaveBeenCalledTimes( 1 );
+		expect( instance.destroy ).toHaveBeenCalledTimes( 1 );
 	} );
 } );
 

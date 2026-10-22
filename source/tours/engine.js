@@ -60,7 +60,16 @@ export function createTour( { steps, onFinish } ) {
 		popoverClass: 'bvm-tour',
 		showProgress: true,
 		animate: ! prefersReducedMotion(),
-		onDestroyed: () => onFinish?.(),
+		// Completion is wired through onDestroyStarted, NOT onDestroyed:
+		// driver.js only fires onDestroyed once a step highlight has fully
+		// transitioned (__activeStep set), so a dismissal during the opening
+		// animation would silently skip it and the tour would auto-start
+		// again forever (TECHNICAL.md §9.21). onDestroyStarted fires on every
+		// user-initiated close/finish; d.destroy() then skips the hook.
+		onDestroyStarted: ( _el, _step, { driver: d } ) => {
+			onFinish?.();
+			d.destroy();
+		},
 	} );
 }
 
