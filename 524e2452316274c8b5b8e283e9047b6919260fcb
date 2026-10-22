@@ -1,0 +1,24 @@
+Task: Tour definition + 'Start tour' button on Tools → Block Variations
+
+Summary: New webpack entry 'tours-admin' (source/tours/admin.js) enqueued by
+Tours::enqueue_admin on the edit-bvm_variation screen only. Defines the
+6-step management tour (welcome, list table, Block column, Pages column,
+first-row actions, Add New), mounts a 'Start tour' page-title-action button
+that relaunches anytime, and auto-starts once per user via autoStartTour.
+Completion seed is localized as BVMTours.completed from the user's meta (no
+read request). Engine gained popoverClass 'bvm-tour'; tour.scss skins driver
+popovers to match wp-admin (driver.css bundled). build/ artifacts committed
+per repo convention.
+
+Files: source/tours/admin.js, source/tours/tour.scss (new);
+source/tours/engine.js, includes/class-tours.php, webpack.config.cjs;
+tests/js/tours/admin.test.js (8 tests), tests/php/ToursTest.php (+2);
+build/tours-admin.* (committed artifacts).
+
+Invariants: §9.1 — get_user_meta read only, no new write sites, audit grep
+clean. §9.6/§9.7/§9.16 untouched (no preset/wrapper/template code). No new
+§9 entry: screen-gated enqueue + localized seed is an existing pattern
+(Assets::enqueue_editor).
+
+Why: FR-2 + FR-5 — the management screen is the natural first-contact
+surface; auto-once + relaunch button per spec.
