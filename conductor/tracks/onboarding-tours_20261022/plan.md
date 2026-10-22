@@ -38,7 +38,7 @@
   - [x] Verify tests pass; `npm run build`, commit regenerated `build/`
 - [x] Task: Phase Verification & Checkpoint (Refer to workflow.md)
 
-## Phase 3: Editor tours
+## Phase 3: Editor tours [checkpoint: 313eafa]
 
 - [x] Task: Variation panel tour (post editor) `5081a5d`
   - [x] Write failing Jest tests: "Take the tour" link renders in
@@ -52,7 +52,7 @@
         link in usage panel
   - [x] Implement short tour (name field, single-root rule, propagation note)
   - [x] Verify tests pass; rebuild + commit `build/`
-- [ ] Task: Phase Verification & Checkpoint (Refer to workflow.md)
+- [x] Task: Phase Verification & Checkpoint (Refer to workflow.md)
 
 ## Phase 4: E2E, docs & release polish
 
