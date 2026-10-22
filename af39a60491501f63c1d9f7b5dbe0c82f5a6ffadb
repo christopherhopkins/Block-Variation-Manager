@@ -1,0 +1,8 @@
+Task: Documentation
+
+Summary: TECHNICAL.md (committed with c583b19, same-file change set): §3.6
+user meta (bvm_tours_completed), §4.7 onboarding-tours flow table, PHP/JS
+file tables + BVM/BVMTours localize docs, §9.21 invariant. README: guided
+tours feature blurb (auto-once, revisit buttons, per-user persistence).
+
+No code changes; php -l n/a.
