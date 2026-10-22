@@ -29,8 +29,8 @@ Track: `code-review_20261021` · Spec: [spec.md](./spec.md)
 - [x] Task: Rebuild + commit `build/` if any `source/` file changed (done in cluster 3); `php -l` all touched PHP (clean)
 - [x] Task: Phase Verification & Checkpoint (Refer to workflow.md) — user confirmed 2026-10-22
 
-## Phase 4: Finalize
+## Phase 4: Finalize [checkpoint: 4868a6a]
 
 - [x] Task: Full suites green locally (Jest, PHPUnit ±multisite, Playwright); §9.1 grep clean; update `review.md` dispositions
 - [x] Task: Push and confirm CI green on `main`
-- [ ] Task: Phase Verification & Checkpoint (Refer to workflow.md)
+- [x] Task: Phase Verification & Checkpoint (Refer to workflow.md)
