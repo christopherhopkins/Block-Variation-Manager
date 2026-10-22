@@ -1,0 +1,16 @@
+Task: JS tour-state store
+
+Summary: source/tours/state.js holds the per-user completion map: seeded from
+localized data (initTourState), read via hasCompleted, written optimistically
+by markCompleted which persists the full map through core POST /wp/v2/users/me
+(failures swallowed — worst case the tour re-auto-starts elsewhere).
+launchTour always shows a tour and marks it completed on finish/dismiss;
+autoStartTour gates on hasCompleted and never marks when nothing was shown
+(startTour false). TOURS_META_KEY mirrors BVM\Tours::META_KEY.
+
+Files:
+- source/tours/state.js (new)
+- tests/js/tours/state.test.js (new, 11 tests — TDD red confirmed first)
+
+Why: FR-5 — auto-start-once gating + always-relaunchable tours, shared by all
+three tour surfaces.
