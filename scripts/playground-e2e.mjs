@@ -25,9 +25,12 @@ const filtered = {
 	// QUA-6: the committed visual baselines depend on the rendering
 	// environment — pin WordPress for the E2E server instead of "latest"
 	// (the public demo blueprint keeps latest; this override is test-only).
+	// Keep this on the major.minor the baselines were generated against, and
+	// within Playground's supported range: an out-of-range version hangs the
+	// boot at "WordPress is not ready yet".
 	preferredVersions: {
 		...original.preferredVersions,
-		wp: '6.8',
+		wp: '7.1',
 	},
 	steps: original.steps.filter(
 		( s ) => ! ( s.step === 'installPlugin' && s?.pluginData?.resource === 'git:directory' )

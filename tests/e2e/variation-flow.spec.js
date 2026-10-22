@@ -6,68 +6,17 @@
  * (scripts/playground-e2e.mjs); the blueprint auto-logs-in as admin.
  */
 import { test, expect } from '@playwright/test';
+import {
+	canvas,
+	openEditor,
+	openSettingsSidebar,
+	openPanel,
+	insertHeading,
+} from './helpers.js';
 
 const VARIATION_NAME = `E2E hero ${ Date.now() }`;
 
-/** The block editor canvas lives in an iframe on modern WP. */
-function canvas( page ) {
-	return page.frameLocator( 'iframe[name="editor-canvas"]' );
-}
-
-async function openNewPost( page ) {
-	await page.goto( '/wp-admin/post-new.php' );
-	await expect(
-		page.locator( 'iframe[name="editor-canvas"]' )
-	).toBeVisible( { timeout: 60_000 } );
-	// Dismiss the welcome guide when it appears (first editor load).
-	const guideClose = page.getByRole( 'button', { name: 'Close', exact: true } );
-	try {
-		await guideClose.click( { timeout: 5_000 } );
-	} catch ( _e ) {
-		// Not shown — fine.
-	}
-}
-
-/**
- * Insert a selected core/heading via the block-editor store — deterministic,
- * and the subject under test is the plugin's sidebar panel, not Gutenberg's
- * typing flows.
- */
-async function insertHeading( page, text ) {
-	await page.evaluate( ( content ) => {
-		const { dispatch } = window.wp.data;
-		const block = window.wp.blocks.createBlock( 'core/heading', {
-			level: 3,
-			content,
-		} );
-		dispatch( 'core/block-editor' ).insertBlocks( block );
-		dispatch( 'core/block-editor' ).selectBlock( block.clientId );
-	}, text );
-	return canvas( page ).getByRole( 'document', {
-		name: /Block: Heading/,
-	} );
-}
-
-/** Expand a sidebar PanelBody when it is collapsed. */
-async function openPanel( page, name ) {
-	const toggle = page.getByRole( 'button', { name } );
-	if ( ( await toggle.getAttribute( 'aria-expanded' ) ) !== 'true' ) {
-		await toggle.click();
-	}
-}
-
-async function openSettingsSidebar( page ) {
-	const settingsToggle = page.getByRole( 'button', {
-		name: 'Settings',
-		exact: true,
-	} );
-	if (
-		( await settingsToggle.getAttribute( 'aria-pressed' ) ) !== 'true'
-	) {
-		await settingsToggle.click();
-	}
-	await page.getByRole( 'tab', { name: 'Block' } ).click();
-}
+const openNewPost = ( page ) => openEditor( page );
 
 test.describe.serial( 'variation lifecycle', () => {
 	test( 'save a heading as a variation', async ( { page } ) => {

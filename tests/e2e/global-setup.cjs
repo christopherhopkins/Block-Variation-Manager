@@ -13,26 +13,58 @@ const STATE_PATH = path.join( __dirname, '.auth-state.json' );
 module.exports = async ( config ) => {
 	const base = config.projects[ 0 ].use.baseURL;
 
-	// 1. Readiness: the login page renders real WordPress markup.
-	const deadline = Date.now() + 300_000;
+	// 1. Readiness: the REST index must answer with JSON. This needs a tiny
+	// cookie jar: Playground's auto-login interceptor 302s EVERY cookieless
+	// request (REST included, and even while WordPress itself still shows
+	// "WordPress is not ready yet"), so a bare status check passes long
+	// before the site works — which once let the whole suite start against a
+	// booting site. Cold boots (fresh CLI/WP caches) take minutes.
+	const probe = async () => {
+		let cookies = '';
+		let url = base + '/?rest_route=/';
+		for ( let hop = 0; hop < 5; hop++ ) {
+			const res = await fetch( url, {
+				redirect: 'manual',
+				headers: {
+					accept: 'application/json',
+					...( cookies ? { cookie: cookies } : {} ),
+				},
+			} );
+			const setc = res.headers.getSetCookie
+				? res.headers.getSetCookie()
+				: [];
+			if ( setc.length ) {
+				cookies = [ cookies, ...setc.map( ( c ) => c.split( ';' )[ 0 ] ) ]
+					.filter( Boolean )
+					.join( '; ' );
+			}
+			const text = await res.text();
+			if ( text.includes( 'WordPress is not ready yet' ) ) {
+				return 'booting';
+			}
+			if ( res.ok && text.trimStart().startsWith( '{' ) ) {
+				return 'ready';
+			}
+			if ( res.status >= 300 && res.status < 400 ) {
+				url = new URL( res.headers.get( 'location' ) || url, base ).href;
+				continue;
+			}
+			return `HTTP ${ res.status }`;
+		}
+		return 'redirect loop';
+	};
+
+	const deadline = Date.now() + 420_000;
 	let last = '';
 	for ( ;; ) {
 		if ( Date.now() > deadline ) {
 			throw new Error( `Playground never became ready (${ last })` );
 		}
 		try {
-			// redirect: manual — fetch has no cookie jar, so following the
-			// auto-login redirect chain just loops. A 302 (auto-login) or a
-			// 200 login form both mean WordPress is routing requests.
-			const res = await fetch( base + '/wp-login.php', {
-				redirect: 'manual',
-			} );
-			const text = await res.text();
-			const booting = text.includes( 'WordPress is not ready yet' );
-			if ( ! booting && ( res.status === 302 || ( res.ok && text.includes( 'loginform' ) ) ) ) {
+			last = await probe();
+			if ( 'ready' === last ) {
 				break;
 			}
-			last = `HTTP ${ res.status }${ booting ? ' (booting)' : '' }`;
 		} catch ( err ) {
 			last = err.message;
 		}

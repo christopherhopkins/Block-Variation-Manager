@@ -1,56 +1,26 @@
 /**
  * Visual regression (spec FR5): committed baselines for the variation sidebar
- * panels, the Tools → Block Variations row, and a propagated front-end render.
+ * panels, the Tools → Block Variations row, and a linked heading's front-end
+ * render.
  *
  * Baselines are platform-suffixed by Playwright (-win32 / -linux); regenerate
  * with `npx playwright test tests/e2e/visual.spec.js --update-snapshots` on
- * the matching platform. Dynamic regions (dates) are masked.
+ * the matching platform (linux: the pinned CI container — see tests.yml).
+ * Dynamic regions (dates) are masked; row-actions are hidden (their height
+ * depends on hover detection). The E2E server pins the WordPress version
+ * (scripts/playground-e2e.mjs) so baselines don't drift with core releases.
  */
 import { test, expect } from '@playwright/test';
+import { openEditor, openSettingsSidebar, openPanel } from './helpers.js';
 
 const VISUAL_TITLE = 'Visual baseline hero';
 const INSTANCE_SLUG = 'bvm-visual-instance';
 
-function canvas( page ) {
-	return page.frameLocator( 'iframe[name="editor-canvas"]' );
-}
-
 /**
  * Idempotent fixtures, created through the plugin's own REST API from an
- * admin page (nonce-authenticated): one fixed-name variation and one
- * published post linked to it.
+ * authenticated editor page: one fixed-name variation and one published post
+ * linked to it.
  */
-/**
- * Load the post editor and wait until its UI is actually usable (canvas
- * iframe + Settings toggle). A cold Playground can serve a partial page that
- * never finishes mounting, so reload and retry instead of waiting on one
- * load.
- */
-async function openEditor( page ) {
-	for ( let attempt = 0; attempt < 10; attempt++ ) {
-		await page
-			.goto( '/wp-admin/post-new.php', { timeout: 60_000 } )
-			.catch( () => {} );
-		const ready = await Promise.all( [
-			page
-				.waitForFunction( () => !! window.wp?.apiFetch, null, {
-					timeout: 30_000,
-				} )
-				.then( () => true )
-				.catch( () => false ),
-			page
-				.getByRole( 'button', { name: 'Settings', exact: true } )
-				.waitFor( { timeout: 30_000 } )
-				.then( () => true )
-				.catch( () => false ),
-		] );
-		if ( ready.every( Boolean ) ) {
-			return;
-		}
-	}
-	throw new Error( 'Editor never became ready on /wp-admin/post-new.php' );
-}
-
 async function ensureFixtures( page ) {
 	await openEditor( page );
 	return await page.evaluate(
@@ -118,31 +88,18 @@ test.describe( 'visual baselines', () => {
 			dispatch( 'core/block-editor' ).selectBlock( block.clientId );
 		} );
 
-		const settingsToggle = page.getByRole( 'button', {
-			name: 'Settings',
-			exact: true,
-		} );
-		if (
-			( await settingsToggle.getAttribute( 'aria-pressed' ) ) !== 'true'
-		) {
-			await settingsToggle.click();
-		}
-		await page.getByRole( 'tab', { name: 'Block' } ).click();
-
+		await openSettingsSidebar( page );
 		for ( const name of [ 'Variation source', 'Save as variation' ] ) {
-			const toggle = page.getByRole( 'button', { name } );
-			if ( ( await toggle.getAttribute( 'aria-expanded' ) ) !== 'true' ) {
-				await toggle.click();
-			}
+			await openPanel( page, name );
 		}
 		// Panel data loaded: the Apply select is populated.
 		await expect(
 			page.getByRole( 'combobox', { name: 'Apply' } )
 		).toBeVisible();
 
-		// Clip to the two plugin panels (wrapper of the Variation source
-		// toggle's PanelBody and everything to the Save panel's end), via the
-		// sidebar region to keep width stable.
+		// The whole settings region is the baseline: it includes core's own
+		// inspector panels around the two plugin panels, which is deliberate —
+		// a layout clash WITH core chrome is exactly what this shot catches.
 		await expect(
 			page.getByRole( 'region', { name: 'Editor settings' } )
 		).toHaveScreenshot( 'variation-panels.png' );
@@ -173,7 +130,10 @@ test.describe( 'visual baselines', () => {
 		} );
 	} );
 
-	test( 'propagated front-end render', async ( { page } ) => {
+	// QUA-4: honestly named — this is a static render baseline of a LINKED
+	// heading (the merge/bake channels are exercised by the propagation
+	// journey spec and the PHP suites, not by this screenshot).
+	test( 'linked heading front-end baseline', async ( { page } ) => {
 		const { postId } = await ensureFixtures( page );
 		await page.goto( `/?p=${ postId }` );
 		const heading = page
