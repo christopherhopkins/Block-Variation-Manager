@@ -22,3 +22,12 @@ clean. §9.6/§9.7/§9.16 untouched (no preset/wrapper/template code). No new
 
 Why: FR-2 + FR-5 — the management screen is the natural first-contact
 surface; auto-once + relaunch button per spec.
+
+--- Phase Verification Report: Phase 2 (Management-screen tour) ---
+Automated: CI=true npm run test:unit --coverage (183 tests pass, source/tours
+100% stmts, global gates met) and npm run test:php (123 tests OK, 4 skipped
+pre-existing).
+Manual plan: playground:local → Tools → Block Variations: auto-start tour,
+no re-auto-start after reload, Start tour button relaunches.
+User confirmation: 'Yes — Phase 2 verified, create the checkpoint and
+continue to Phase 3.' (2026-10-22)
