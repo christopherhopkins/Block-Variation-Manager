@@ -3,4 +3,4 @@
 - [Specification](./spec.md)
 - [Implementation Plan](./plan.md)
 - [Metadata](./metadata.json)
-- Review report: `./review.md` (written during Phase 2)
+- [Review report](./review.md)

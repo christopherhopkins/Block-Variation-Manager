@@ -12,9 +12,9 @@ Track: `code-review_20261021` · Spec: [spec.md](./spec.md)
 
 ## Phase 2: Verification & report
 
-- [~] Task: Adversarially verify every raw finding against the code; drop/downgrade what doesn't hold
-- [ ] Task: Write `review.md` (severity-ranked, file:line, rule violated, disposition) and link it from the track index
-- [ ] Task: Phase Verification & Checkpoint (Refer to workflow.md)
+- [x] Task: Adversarially verify every raw finding against the code; drop/downgrade what doesn't hold — 2 refuted (INV-1, QUA-7); SEC-3 and COR-11 confirmed empirically
+- [x] Task: Write `review.md` (severity-ranked, file:line, rule violated, disposition) and link it from the track index
+- [~] Task: Phase Verification & Checkpoint (Refer to workflow.md)
 
 ## Phase 3: Fixes (TDD, one finding at a time)
 
