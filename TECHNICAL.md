@@ -221,9 +221,11 @@ The variation edit screen is the normal block editor plus
 ### 4.3 Propagation (cron)
 
 `Propagate::run( $variation_id, $after_id = 0 )` on hook
-`bvm_propagate_variation`, batches of `BATCH_SIZE = 50` via keyset paging,
-continuation events scheduled +30 s with the last processed ID as cursor
-(deduped via `wp_next_scheduled`, same as the initial `schedule()`).
+`bvm_propagate_variation`, batches of `BATCH_SIZE = 50` via keyset paging.
+The continuation event (+30 s, last batch ID as cursor, deduped via
+`wp_next_scheduled`) is scheduled **before** the batch is processed, so a
+timeout/fatal mid-batch cannot kill the chain; re-processed instances that
+already carry the current source are recognized as in-sync (COR-1).
 
 Per matched instance block (`blockName === block_type` AND
 `bvmVariationId === id` — both checks required), inside `walk()`:
@@ -243,14 +245,27 @@ Per matched instance block (`blockName === block_type` AND
 3. **Bake-splice** (when `CPT::block_needs_bake()` — i.e. static-save — and
    the instance has no overrides): if the instance's wrapper prefix/suffix
    (`wrapper_html()`: leading/trailing string segments of `innerContent`)
-   still match the *snapshot's*, write `attrs = array_merge(instance,
-   preset)` + new wrapper HTML. Mismatch ⇒ `content_diverged`, skip. The
-   merge (not replace) is what preserves instance-only attrs.
+   still match the *snapshot's* (or already match the *current* source),
+   write `attrs = array_merge(instance, preset)` + new wrapper HTML.
+   Mismatch ⇒ `content_diverged`, skip. The attrs merge preserves
+   instance-only **attrs that live in the comment**; note (COR-3) that an
+   instance whose *baked wrapper markup* itself differs from the snapshot —
+   a custom `className` serialized into the class attribute, an edited
+   `href`/`src`, hand-edited text — fails the wrapper compare and is
+   skipped, not partially merged: for static blocks the snapshot-identical
+   wrapper is the only safe overwrite target.
 4. Changed instances are persisted via `update_instance_content()`: slashed
-   `wp_update_post`, kses suspended/restored, and both save hooks removed
-   around updates when the instance is itself a `bvm_variation`.
-5. After the **final** batch: `write_skipped()` and `write_snapshot()` — the
-   just-propagated source becomes the next run's baseline.
+   `wp_update_post`, kses suspended and restored in a `finally` (SEC-2).
+   The nested-variation hook-removal branch is **currently unreachable**
+   (COR-D2): `usage_where()` excludes `bvm_variation` posts from instance
+   queries, so a variation embedding a linked child is *not* rewritten when
+   the child's variation changes — the guard stays as defense for a future
+   children design (§10).
+5. `write_skipped()` runs after **every** batch (first batch resets, later
+   batches extend, rows deduped by post ID); `write_snapshot()` only after
+   the **final** batch — the just-propagated source becomes the next run's
+   baseline. The attrs-only early exit also clears stale skipped rows
+   (COR-D3).
 
 With **no snapshot** (legacy data), comparisons fall back to the *current*
 source: matching instances are already up to date (no-op), differing ones are
@@ -457,7 +472,9 @@ grep -rn "wp_insert_post\|wp_update_post\|update_post_meta" includes/ | grep -v 
 ```
 
 (The only intentional non-slashed writes are plain sanitized strings like
-`BVM_META_BLOCK_TYPE` block names, which never contain backslashes.)
+`BVM_META_BLOCK_TYPE` block names, which never contain backslashes. The grep
+also flags multi-line calls whose `wp_slash(` sits on the next line — check
+those by eye before concluding anything.)
 
 ### 9.2 Never hand-roll block comments
 
@@ -489,6 +506,12 @@ exist yet), (b) at the end of a *completed* run (final batch / no instances /
 nothing-to-do). Writing it on ordinary variation saves would make every
 in-sync instance look diverged on the next run.
 
+Corollary (COR-1): every in-sync comparison must ALSO accept an instance that
+already matches the **current** source — continuations are pre-scheduled, so
+a re-processed batch legitimately contains instances the interrupted run
+already rewrote, and comparing them only against the old snapshot would flag
+them diverged forever.
+
 ### 9.6 Wrapper chain has one source of truth
 
 `BlockRegistry::wrapper_chain()`. If content wrapping, the localized
@@ -509,6 +532,13 @@ variation's root block" must call this method.
   instance's identity onto all instances. Sole deliberate exception (§9.16):
   a linked child inside a template keeps exactly its `bvmVariationId` —
   nothing else.
+- Preset values also cross a USER trust boundary (SEC-1): they are merged
+  into other users' blocks at render and baked into their posts by cron.
+  Every write path that accepts client attrs/inner trees must therefore run
+  `Attributes::sanitize_untrusted()` (kses on string leaves unless the writer
+  has `unfiltered_html`) alongside the strip, and respect
+  `Attributes::MAX_JSON_BYTES`. The registered meta `sanitize_callback`
+  backstops direct writes.
 
 ### 9.8 Matching instances
 
@@ -659,24 +689,46 @@ vendor adapter with its own parse-content CSS pass, needs the equivalent
 hook, and `Render::apply_variation` must keep tolerating non-array input
 (that filter's chain may carry objects).
 
+### 9.20 Rich-text attrs are objects in the editor — normalize before comparing
+
+Since WP 6.5 the block editor stores rich-text attribute values (heading,
+paragraph, button `content`, …) as `RichTextData` objects, while a
+variation's preset holds the serialized string. Any identity/deep comparison
+between live editor attrs and preset values must normalize both sides to
+strings first — `deepEqual()` in `source/lib/equality.js` does this for
+anything exposing `toHTMLString()`. Comparing raw values is always unequal,
+which silently (a) rewrote identical text into the store on every post open
+(dirtying every post containing a linked block) and (b) made rich-text
+overrides impossible to un-mark, since the "set back to variation value"
+check could never match. Route every new editor-side attr comparison through
+`deepEqual`, never `===`/`JSON.stringify` on possibly-rich values.
+
 ---
 
 ## 10. Known limitations
 
 - **Parts of inner-block behavior remain pending a maintainer design
-  decision** (updated 2026-08-19 — do NOT change these without the
+  decision** (updated 2026-10-21 — do NOT change these without the
   maintainer's direction on how children should function): (a) free-form
   containers WITHOUT required children (core/group, core/columns, …) still
   save childless variations with no option offered — kadence/rowlayout is now
   handled via the `DEFAULT_REQUIRED_CHILDREN` seed and linked-child opacity
-  (§9.16); (b) `Propagate::walk()`'s in-sync checks compare against the
-  last-propagated snapshot only, so an instance whose children/markup already
-  match the *current* template is flagged diverged and can never converge
-  (the snapshot advances after every run); (c) the skipped-posts notice
-  suggests re-saving the post, which does not adopt a new template. A
-  reverted fix for (a)-generalized (capture checkbox), (b) (current-first
-  ordering, the retired §9.15), and (c) exists in the 2026-08-19 session
-  history.
+  (§9.16); (b) **resolved 2026-10-21** (code-review track COR-1, maintainer-
+  approved): instances already matching the *current* source/template are
+  recognized as in-sync by both the bake and inner-replace paths — see the
+  §9.5 corollary; (c) the skipped-posts notice suggests re-saving the post,
+  which does not adopt a new template — still pending, as is (a)'s capture
+  checkbox (the 2026-08-19 reverted fix remains the reference).
+- **Mid-run variation edits can still strand early batches** (COR-2
+  residual): if a variation is saved while a multi-batch run is in flight,
+  instances rewritten by earlier batches carry the intermediate source and
+  match neither the final snapshot nor the newest source — they are flagged
+  diverged and need a manual re-save. The matches-current check (COR-1)
+  absorbs the single-edit case only.
+- **Template replacement copies the variation children's `uniqueID`s into
+  instances** (review finding COR-6, deferred): fixing it means deciding how
+  non-linked template children own identity — part of the pending children
+  design above.
 
 - **Programmatic edits bypass override tracking.** Attribute changes made via
   `dispatch('core/block-editor').updateBlockAttributes` (other plugins, core

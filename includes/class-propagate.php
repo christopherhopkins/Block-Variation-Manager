@@ -19,10 +19,12 @@ if ( ! defined( 'ABSPATH' ) ) {
  *   post_content is the golden snapshot — Gutenberg saves it via /wp/v2/
  *   after running save() in JS, so the wrapper it contains is current.
  *
- *   Only runs for block types where CPT::block_needs_bake() returns true
- *   (default: static-save blocks, i.e. no render_callback). Dynamic blocks —
- *   including Kadence's request-time CSS pipeline — pick up variation
- *   changes via the render-time merge without any baked-HTML rewrite.
+ *   Only runs for block types where CPT::block_needs_bake() returns true —
+ *   the §9.18 classification (no render_callback, OR a markup-filter
+ *   callback over markup-sourced attrs without a uniqueID). Attr-merge-only
+ *   blocks — including Kadence's request-time CSS pipeline — pick up
+ *   variation changes via the render-time merge without any baked-HTML
+ *   rewrite.
  *
  *   Instance blocks with bvmOverriddenAttrs set, or whose baked HTML /
  *   children no longer match the last-propagated snapshot (hand-edited text
@@ -263,6 +265,10 @@ class Propagate {
 		// bvm_variation (e.g., a nested-variation template): schedule would
 		// loop the cron job, and the meta sync would overwrite the nested
 		// variation's attrs meta from its freshly spliced content.
+		// NOTE (COR-D2): this branch is currently unreachable — usage_where()
+		// excludes bvm_variation posts from instance queries, so variations
+		// embedding linked children are never rewritten here. Kept as a guard
+		// for the pending §10 children design.
 		$is_nested_variation = ( BVM_CPT === $inst_post->post_type );
 		if ( $is_nested_variation ) {
 			remove_action( 'save_post_' . BVM_CPT, [ self::class, 'schedule' ], 20 );

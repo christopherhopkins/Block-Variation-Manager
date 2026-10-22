@@ -1,74 +1,30 @@
-# Google JavaScript Style Guide Summary
+# JavaScript Style Guide — WordPress conventions
 
-This document summarizes key rules and best practices from the Google JavaScript
-Style Guide.
+This project follows the **WordPress JavaScript coding standards**, not a
+generic style guide (QUA-11: the previously bundled Google guide contradicted
+every file in the repo).
 
-## 1. Source File Basics
+Reference: https://developer.wordpress.org/coding-standards/wordpress-coding-standards/javascript/
 
--   **File Naming:** All lowercase, with underscores (`_`) or dashes (`-`).
-    Extension must be `.js`.
--   **File Encoding:** UTF-8.
--   **Whitespace:** Use only ASCII horizontal spaces (0x20). Tabs are forbidden
-    for indentation.
+The conventions actually used here:
 
-## 2. Source File Structure
+- **Tabs** for indentation.
+- **Spaces inside parentheses** of control structures and function calls:
+  `if ( condition )`, `fn( arg )`.
+- **Single quotes** for strings; template literals where interpolation helps.
+- **Semicolons** always.
+- `camelCase` for variables/functions, `UPPER_SNAKE_CASE` for module
+  constants, `PascalCase` for React components.
+- **JSDoc blocks** on every exported function and on non-obvious internal
+  ones; comments explain constraints and *why*, never restate the code.
+- ES modules; `export default` is acceptable for React components (one per
+  file); named exports for libraries (`source/lib/`).
+- `@wordpress/*` packages are consumed as webpack externals — import them by
+  package name and never bundle them.
+- React: function components + hooks; follow the rules-of-hooks; prefer
+  `useSyncExternalStore` for external stores (see `source/lib/use-variation.js`).
 
--   New files should be ES modules (`import`/`export`).
--   **Exports:** Use named exports (`export {MyClass};`). **Do not use default
-    exports.**
--   **Imports:** Do not use line-wrapped imports. The `.js` extension in import
-    paths is mandatory.
-
-## 3. Formatting
-
--   **Braces:** Required for all control structures (`if`, `for`, `while`,
-    etc.), even single-line blocks. Use K&R style ("Egyptian brackets").
--   **Indentation:** +2 spaces for each new block.
--   **Semicolons:** Every statement must be terminated with a semicolon.
--   **Column Limit:** 80 characters.
--   **Line-wrapping:** Indent continuation lines at least +4 spaces.
--   **Whitespace:** Use single blank lines between methods. No trailing
-    whitespace.
-
-## 4. Language Features
-
--   **Variable Declarations:** Use `const` by default, `let` if reassignment is
-    needed. **`var` is forbidden.**
--   **Array Literals:** Use trailing commas. Do not use the `Array` constructor.
--   **Object Literals:** Use trailing commas and shorthand properties. Do not
-    use the `Object` constructor.
--   **Classes:** Do not use JavaScript getter/setter properties (`get name()`).
-    Provide ordinary methods instead.
--   **Functions:** Prefer arrow functions for nested functions to preserve
-    `this` context.
--   **String Literals:** Use single quotes (`'`). Use template literals (`` `
-    ``) for multi-line strings or complex interpolation.
--   **Control Structures:** Prefer `for-of` loops. `for-in` loops should only be
-    used on dict-style objects.
--   **`this`:** Only use `this` in class constructors, methods, or in arrow
-    functions defined within them.
--   **Equality Checks:** Always use identity operators (`===` / `!==`).
-
-## 5. Disallowed Features
-
--   `with` keyword.
--   `eval()` or `Function(...string)`.
--   Automatic Semicolon Insertion.
--   Modifying builtin objects (`Array.prototype.foo = ...`).
-
-## 6. Naming
-
--   **Classes:** `UpperCamelCase`.
--   **Methods & Functions:** `lowerCamelCase`.
--   **Constants:** `CONSTANT_CASE` (all uppercase with underscores).
--   **Non-constant Fields & Variables:** `lowerCamelCase`.
-
-## 7. JSDoc
-
--   JSDoc is used on all classes, fields, and methods.
--   Use `@param`, `@return`, `@override`, `@deprecated`.
--   Type annotations are enclosed in braces (e.g., `/** @param {string} userName
-    */`).
-
-*Source:
-[Google JavaScript Style Guide](https://google.github.io/styleguide/jsguide.html)*
+Enforcement: there is currently **no lint gate** — `wp-scripts lint-js`
+crashes against this dependency tree (typescript-eslint peer chain) and
+adopting it needs its own dependency work; tracked as a follow-up in the
+code-review track's report. Until then, match the surrounding file.

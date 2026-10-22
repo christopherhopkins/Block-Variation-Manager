@@ -26,16 +26,33 @@ writeFileSync( localBlueprint, JSON.stringify( filtered, null, 2 ) );
 const cleanup = () => {
 	try { unlinkSync( localBlueprint ); } catch ( e ) { /* ignore */ }
 };
-process.on( 'SIGINT', () => { cleanup(); process.exit( 0 ); } );
-process.on( 'SIGTERM', () => { cleanup(); process.exit( 0 ); } );
+
+// COR-12: shell:true is required on Windows (npx resolves to npx.cmd), but
+// array args are concatenated UNQUOTED — quote and join ourselves so a
+// checkout path with a space survives.
+const quote = ( s ) => ( /[\s"]/.test( s ) ? '"' + s.replace( /"/g, '\\"' ) + '"' : s );
+const command = [
+	'npx',
+	'-y',
+	// Pinned for determinism (kept in step with scripts/playground-e2e.mjs).
+	'@wp-playground/cli@3.1.60',
+	'server',
+	'--blueprint=' + localBlueprint,
+	'--auto-mount',
+].map( quote ).join( ' ' );
+
+const child = spawn( command, { stdio: 'inherit', cwd: repoRoot, shell: true } );
+
+const forward = ( signal ) => () => {
+	child.kill( signal );
+	cleanup();
+	process.exit( 0 );
+};
+process.on( 'SIGINT', forward( 'SIGINT' ) );
+process.on( 'SIGTERM', forward( 'SIGTERM' ) );
 process.on( 'exit', cleanup );
 
-// shell: true is required on Windows because `npx` resolves to npx.cmd
-// (a batch file), which Node's spawn rejects with EINVAL otherwise. Safe
-// on POSIX too — argv contains no user input.
-const child = spawn(
-	'npx',
-	[ '-y', '@wp-playground/cli@latest', 'server', '--blueprint=' + localBlueprint, '--auto-mount' ],
-	{ stdio: 'inherit', cwd: repoRoot, shell: true }
-);
-child.on( 'exit', ( code ) => { cleanup(); process.exit( code ?? 0 ); } );
+child.on( 'exit', ( code, signal ) => {
+	cleanup();
+	process.exit( signal ? 1 : code ?? 0 );
+} );

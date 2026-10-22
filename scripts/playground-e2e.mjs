@@ -22,6 +22,13 @@ const filtered = {
 	...original,
 	// Tests drive specific URLs themselves.
 	landingPage: '/wp-admin/',
+	// QUA-6: the committed visual baselines depend on the rendering
+	// environment — pin WordPress for the E2E server instead of "latest"
+	// (the public demo blueprint keeps latest; this override is test-only).
+	preferredVersions: {
+		...original.preferredVersions,
+		wp: '6.8',
+	},
 	steps: original.steps.filter(
 		( s ) => ! ( s.step === 'installPlugin' && s?.pluginData?.resource === 'git:directory' )
 	),
@@ -31,22 +38,39 @@ writeFileSync( localBlueprint, JSON.stringify( filtered, null, 2 ) );
 const cleanup = () => {
 	try { unlinkSync( localBlueprint ); } catch ( e ) { /* ignore */ }
 };
-process.on( 'SIGINT', () => { cleanup(); process.exit( 0 ); } );
-process.on( 'SIGTERM', () => { cleanup(); process.exit( 0 ); } );
+
+// COR-12: shell:true is required on Windows (npx resolves to npx.cmd), but
+// args passed as an array are concatenated UNQUOTED — a checkout path with a
+// space breaks --blueprint. Build one properly quoted command string instead.
+const quote = ( s ) => ( /[\s"]/.test( s ) ? '"' + s.replace( /"/g, '\\"' ) + '"' : s );
+const command = [
+	'npx',
+	'-y',
+	// QUA-6/SEC-7: pinned — an unpinned @latest made baselines and CI
+	// non-deterministic (and is a supply-chain exposure in CI).
+	'@wp-playground/cli@3.1.60',
+	'server',
+	'--blueprint=' + localBlueprint,
+	'--auto-mount',
+	'--login',
+	'--port=' + port,
+].map( quote ).join( ' ' );
+
+const child = spawn( command, { stdio: 'inherit', cwd: repoRoot, shell: true } );
+
+// COR-12: forward signals so the npx tree dies with us instead of orphaning
+// and squatting on the port.
+const forward = ( signal ) => () => {
+	child.kill( signal );
+	cleanup();
+	process.exit( 0 );
+};
+process.on( 'SIGINT', forward( 'SIGINT' ) );
+process.on( 'SIGTERM', forward( 'SIGTERM' ) );
 process.on( 'exit', cleanup );
 
-// shell: true is required on Windows because `npx` resolves to npx.cmd.
-const child = spawn(
-	'npx',
-	[
-		'-y',
-		'@wp-playground/cli@latest',
-		'server',
-		'--blueprint=' + localBlueprint,
-		'--auto-mount',
-		'--login',
-		'--port=' + port,
-	],
-	{ stdio: 'inherit', cwd: repoRoot, shell: true }
-);
-child.on( 'exit', ( code ) => { cleanup(); process.exit( code ?? 0 ); } );
+child.on( 'exit', ( code, signal ) => {
+	cleanup();
+	// A signal death is a failure, not success (COR-12).
+	process.exit( signal ? 1 : code ?? 0 );
+} );
