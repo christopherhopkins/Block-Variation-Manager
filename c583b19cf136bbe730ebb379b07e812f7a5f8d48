@@ -1,0 +1,22 @@
+Task: Playwright E2E (onboarding tours)
+
+Summary: tests/e2e/tours.spec.js (3 serial tests): fresh-user auto-start +
+dismissal persisted through core user meta, no re-auto-start after reload,
+Start tour relaunch. global-setup.cjs now pre-completes all tours for the
+shared admin (an auto-started overlay intercepted clicks and polluted visual
+baselines in other specs); the spec resets and restores that state itself.
+
+Bug found by the E2E and fixed: driver.js fires onDestroyed only after the
+step highlight transition completes, so dismissing during the opening
+animation silently skipped markCompleted — manual testing (late dismissals)
+passed while automated clicks (<100ms) failed. createTour now wires
+completion through onDestroyStarted and calls driver.destroy() inside it.
+
+Invariants: new §9.21 added (driver.js completion must hook onDestroyStarted,
+with audit grep). §9.1 unaffected (no new writes). Baselines: win32
+variation-panels (Take the tour link) + tools-listing-row (environment drift,
+reproduced with tours disabled — not plugin-caused) regenerated;
+variation-panels-linux.png deleted per the §11.1 CI-container procedure.
+
+Verification: full Playwright suite 13/13; Jest 201 w/ coverage gates;
+PHPUnit 124.
