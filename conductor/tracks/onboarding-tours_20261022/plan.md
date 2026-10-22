@@ -2,13 +2,13 @@
 
 ## Phase 1: Foundation — tour engine wrapper & persistence
 
-- [ ] Task: Tour wrapper module (`source/tours/`)
-  - [ ] Write failing Jest tests: step-list normalization, missing-anchor
+- [x] Task: Tour wrapper module (`source/tours/`) `3db6fc5`
+  - [x] Write failing Jest tests: step-list normalization, missing-anchor
         skipping, reduced-motion handling, driver.js invocation contract
         (mocked)
-  - [ ] Add `driver.js` (pinned, MIT) to package.json; implement wrapper that
+  - [x] Add `driver.js` (pinned, MIT) to package.json; implement wrapper that
         builds a driver tour from a declarative step list
-  - [ ] Verify tests pass; coverage ≥80%
+  - [x] Verify tests pass; coverage ≥80%
 - [ ] Task: Per-user tour-state meta (PHP)
   - [ ] Write failing PHPUnit tests: meta registered with `show_in_rest`, auth
         restricted to own user, sanitization of the JSON map, REST round-trip
