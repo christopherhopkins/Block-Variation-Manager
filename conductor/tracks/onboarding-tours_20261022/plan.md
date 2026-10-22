@@ -47,11 +47,11 @@
   - [x] Implement steps (save / apply / overrides / detach) + link in
         `VariationPanel.js`
   - [x] Verify tests pass
-- [ ] Task: Variation-editor tour (`bvm_variation` post screen)
-  - [ ] Write failing Jest tests: auto-start gating on the variation editor,
+- [x] Task: Variation-editor tour (`bvm_variation` post screen) `313eafa`
+  - [x] Write failing Jest tests: auto-start gating on the variation editor,
         link in usage panel
-  - [ ] Implement short tour (name field, single-root rule, propagation note)
-  - [ ] Verify tests pass; rebuild + commit `build/`
+  - [x] Implement short tour (name field, single-root rule, propagation note)
+  - [x] Verify tests pass; rebuild + commit `build/`
 - [ ] Task: Phase Verification & Checkpoint (Refer to workflow.md)
 
 ## Phase 4: E2E, docs & release polish
