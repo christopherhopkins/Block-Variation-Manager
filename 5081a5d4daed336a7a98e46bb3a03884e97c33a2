@@ -1,0 +1,22 @@
+Task: Variation panel tour (post editor)
+
+Summary: source/tours/editor.js defines the 5-step panel tour (welcome, Save
+as variation, Apply, overrides, unlink) with EDITOR_TOUR_ID 'editor-panel'.
+VariationPanel gained anchor classes (bvm-variation-source-panel /
+bvm-save-variation-panel), a 'Take the tour' link (always relaunches), and a
+600ms post-mount auto-start that self-gates on the panel being in the DOM
+(sidebar closed → retry on next selection, tour stays unseen). entry.js seeds
+tour state once per load from BVM.toursCompleted (localized by
+Assets::enqueue_editor from user meta) and bundles driver.css + tour.scss.
+PanelBody test mock now passes className through.
+
+Files: source/tours/editor.js (new), source/components/VariationPanel.js,
+source/entry.js, includes/class-assets.php, tests/js/tours/editor.test.js
+(7 tests), tests/js/components/VariationPanel.test.js (+3),
+tests/js/__mocks__/wp-components.js, tests/php/ToursTest.php (+1), build/*.
+
+Invariants: §9.1 — read-only get_user_meta, audit grep clean; §9.11/§9.12
+untouched (no store changes); §9.20 n/a (no attr comparisons added). No new
+§9 entry: follows established localize-seed pattern.
+
+Why: FR-3 + FR-5 — in-context walkthrough of save/apply/override/detach.
