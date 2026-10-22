@@ -16,5 +16,6 @@ class Plugin {
 		Inserter::init();
 		Assets::init();
 		Propagate::init();
+		Tours::init();
 	}
 }
