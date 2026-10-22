@@ -1,0 +1,19 @@
+Task: Tour wrapper module (source/tours/)
+
+Summary: Added driver.js 1.3.6 (pinned, MIT) as the tour engine and a thin
+declarative wrapper, source/tours/engine.js. Tours are defined as step lists
+({element?, title, description}); resolveSteps() drops steps whose anchor is
+absent from the DOM (so one definition serves screens in different states),
+element-less steps become centered modal steps. createTour() builds a driver
+instance with progress UI, animation disabled under prefers-reduced-motion,
+and onDestroyed wired to the caller's onFinish (finish and dismiss both count
+as seen). startTour() creates+drives and reports whether anything was shown.
+
+Files:
+- source/tours/engine.js (new)
+- tests/js/tours/engine.test.js (new, 11 tests — TDD red confirmed first)
+- package.json / package-lock.json (driver.js 1.3.6 exact)
+
+Why: FR-1 of the onboarding-tours spec — a free (MIT) intro.js-style engine
+behind a declarative API so later tour definitions need no driver.js
+knowledge.
