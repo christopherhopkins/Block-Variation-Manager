@@ -21,11 +21,11 @@ Track: `code-review_20261021` · Spec: [spec.md](./spec.md)
 - [~] Task: Fix every confirmed finding — per finding: failing regression test → fix → suites green → §9 entry when the root cause could recur → commit referencing the finding ID
     - [x] Cluster 1 — PHP security/REST `1a48189` (SEC-4 refuted during fixing; defense-in-depth kept)
     - [x] Cluster 2 — Propagate core `1a48189`
-    - [ ] Cluster 3 — JS source/store: COR-4, COR-5, COR-9, COR-10, COR-11, QUA-20, QUA-22, QUA-27a (+ rebuild build/)
-    - [ ] Cluster 4 — Test quality: QUA-1, QUA-2, QUA-3, QUA-8, QUA-9, QUA-12..18, QUA-21
+    - [x] Cluster 3 — JS source/store `be7dba1` (build/ rebuilt + committed)
+    - [x] Cluster 4 — Test quality `292d0ae` (QUA-1 in 1a48189)
     - [ ] Cluster 5 — E2E: QUA-4, QUA-5, QUA-6, QUA-19, QUA-28
-    - [ ] Cluster 6 — CI/scripts: QUA-10, SEC-7 cluster, COR-12, COR-14
-    - [ ] Cluster 7 — Docs + §9 upkeep: COR-3, COR-D2..D5, QUA-11, §10 residuals, new §9 entries
+    - [x] Cluster 6 — CI/scripts `86c3c01`
+    - [x] Cluster 7 — Docs + §9 upkeep `86c3c01` (§9.5/§9.7 extended, NEW §9.20; §10(b) resolved maintainer-approved)
 - [ ] Task: Rebuild + commit `build/` if any `source/` file changed; `php -l` all touched PHP
 - [ ] Task: Phase Verification & Checkpoint (Refer to workflow.md)
 
