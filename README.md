@@ -15,6 +15,7 @@ The Playground site auto-installs Kadence Blocks alongside this plugin, logs you
 - **Tools → Block Variations** lists every saved variation, with the source block type and the number of pages each is used on.
 - In the post editor, the block sidebar gains a **Variation** panel where you can save the selected block's current attributes as a named variation, apply an existing variation to the selected block, or detach an instance.
 - When you edit a variation, every published post that references it is rebaked (for `core/*` blocks whose markup is serialized into `post_content`) so the front-end stays in sync. Manual per-attribute overrides on individual instances are preserved.
+- **Guided tours** walk you through each surface the first time you see it — the Tools screen, the editor's Variation panel, and the variation editor. Revisit them anytime via the **Start tour** button (Tools screen) or the **Take the tour** links in the panels; seen/dismissed state is stored per user, so it follows you across browsers.
 
 ## Development
 
