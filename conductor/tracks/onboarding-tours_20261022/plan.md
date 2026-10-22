@@ -26,7 +26,7 @@
   - [x] Verify tests pass
 - [x] Task: Phase Verification & Checkpoint (Refer to workflow.md)
 
-## Phase 2: Management-screen tour
+## Phase 2: Management-screen tour [checkpoint: 524e245]
 
 - [x] Task: Tour definition + "Start tour" button on Tools → Block Variations `524e245`
   - [x] Write failing Jest tests: step definitions resolve to expected
@@ -36,7 +36,7 @@
         only), steps, button beside the page title; admin-scheme-aligned
         styles
   - [x] Verify tests pass; `npm run build`, commit regenerated `build/`
-- [ ] Task: Phase Verification & Checkpoint (Refer to workflow.md)
+- [x] Task: Phase Verification & Checkpoint (Refer to workflow.md)
 
 ## Phase 3: Editor tours
 
