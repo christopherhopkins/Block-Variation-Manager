@@ -41,6 +41,10 @@ import {
 	BVM_ATTR_OVERRIDES,
 } from '../constants.js';
 import { extractPresetAttrs, shapeInnerBlocks } from '../lib/preset.js';
+import {
+	startEditorTour,
+	maybeAutoStartEditorTour,
+} from '../tours/editor.js';
 
 function useVariationsForBlock( blockName ) {
 	const [ list, setList ] = useState( null );
@@ -292,7 +296,11 @@ function SourcePanel( {
 			: __( 'Variation source', 'block-variation-manager' );
 
 	return (
-		<PanelBody title={ header } initialOpen={ openInitial }>
+		<PanelBody
+			title={ header }
+			initialOpen={ openInitial }
+			className="bvm-variation-source-panel"
+		>
 			{ listError && (
 				<Notice status="error" isDismissible={ false }>
 					{ listError }
@@ -482,6 +490,13 @@ function SourcePanel( {
 					'block-variation-manager'
 				) }
 			</Text>
+			<Button
+				variant="link"
+				onClick={ () => startEditorTour() }
+				style={ { paddingLeft: 0 } }
+			>
+				{ __( 'Take the tour', 'block-variation-manager' ) }
+			</Button>
 		</PanelBody>
 	);
 }
@@ -610,6 +625,7 @@ function SavePanel( { attributes, setAttributes, name, clientId, list } ) {
 		<PanelBody
 			title={ __( 'Save as variation', 'block-variation-manager' ) }
 			initialOpen={ false }
+			className="bvm-save-variation-panel"
 		>
 			<TextControl
 				label={ __( 'Name', 'block-variation-manager' ) }
@@ -691,6 +707,13 @@ export default function VariationPanel( {
 	// Lazy-load the block-policy registry once; cheap no-op after first call.
 	useEffect( () => {
 		ensureRegistryLoaded();
+	}, [] );
+
+	// Auto-start the panel tour once per user, after the sidebar has had a
+	// chance to render (the tour gates itself on the panel being in the DOM).
+	useEffect( () => {
+		const timer = setTimeout( maybeAutoStartEditorTour, 600 );
+		return () => clearTimeout( timer );
 	}, [] );
 
 	return (

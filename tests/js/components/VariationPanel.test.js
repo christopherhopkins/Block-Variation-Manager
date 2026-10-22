@@ -20,9 +20,14 @@ jest.mock( '../../../source/lib/block-registry.js', () => ( {
 	ensureRegistryLoaded: jest.fn( () => Promise.resolve( {} ) ),
 	hasRequiredChildren: jest.fn( () => false ),
 } ) );
+jest.mock( '../../../source/tours/editor.js', () => ( {
+	startEditorTour: jest.fn( () => true ),
+	maybeAutoStartEditorTour: jest.fn( () => false ),
+} ) );
 
 const storeMock = require( '../../../source/lib/variation-store.js' );
 const registryMock = require( '../../../source/lib/block-registry.js' );
+const toursMock = require( '../../../source/tours/editor.js' );
 const VariationPanel =
 	require( '../../../source/components/VariationPanel.js' ).default;
 
@@ -502,5 +507,45 @@ describe( 'SavePanel', () => {
 			fireEvent.click( screen.getByText( 'Save variation' ) );
 		} );
 		expect( screen.getByText( 'duplicate key' ) ).toBeTruthy();
+	} );
+} );
+
+describe( 'onboarding tour integration', () => {
+	it( 'tags both panels with tour anchor classes', async () => {
+		const { container } = renderPanel();
+		await waitFor( () =>
+			expect( screen.getByText( 'Brand hero' ) ).toBeTruthy()
+		);
+		expect(
+			container.querySelector( '.bvm-variation-source-panel' )
+		).not.toBeNull();
+		expect(
+			container.querySelector( '.bvm-save-variation-panel' )
+		).not.toBeNull();
+	} );
+
+	it( 'renders a Take the tour link that relaunches the editor tour', async () => {
+		renderPanel();
+		await waitFor( () =>
+			expect( screen.getByText( 'Take the tour' ) ).toBeTruthy()
+		);
+		fireEvent.click( screen.getByText( 'Take the tour' ) );
+		expect( toursMock.startEditorTour ).toHaveBeenCalledTimes( 1 );
+	} );
+
+	it( 'schedules a one-shot auto-start after mount', async () => {
+		jest.useFakeTimers();
+		try {
+			renderPanel();
+			expect( toursMock.maybeAutoStartEditorTour ).not.toHaveBeenCalled();
+			await act( async () => {
+				jest.advanceTimersByTime( 1000 );
+			} );
+			expect( toursMock.maybeAutoStartEditorTour ).toHaveBeenCalledTimes(
+				1
+			);
+		} finally {
+			jest.useRealTimers();
+		}
 	} );
 } );

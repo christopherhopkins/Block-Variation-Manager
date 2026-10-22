@@ -9,10 +9,10 @@ import { useState } from 'react';
  * assertable. Children stay rendered regardless (the real PanelBody unmounts
  * them when closed; unit suites assert content, e2e asserts the toggling).
  */
-export const PanelBody = ( { title, children, initialOpen = true } ) => {
+export const PanelBody = ( { title, children, initialOpen = true, className } ) => {
 	const [ open, setOpen ] = useState( initialOpen !== false );
 	return (
-		<section>
+		<section className={ className }>
 			<h2>
 				<button
 					type="button"

@@ -114,6 +114,21 @@ class ToursTest extends WP_UnitTestCase {
 		wp_dequeue_style( 'bvm-tours-admin' );
 	}
 
+	public function test_editor_bundle_localizes_tour_seed(): void {
+		$editor = self::factory()->user->create( [ 'role' => 'editor' ] );
+		wp_set_current_user( $editor );
+		update_user_meta( $editor, Tours::META_KEY, [ 'editor-panel' => true ] );
+
+		set_current_screen( 'post' );
+		\BVM\Assets::enqueue_editor();
+
+		$data = wp_scripts()->get_data( 'bvm-editor', 'data' );
+		$this->assertStringContainsString( '"toursCompleted"', $data );
+		$this->assertStringContainsString( '"editor-panel":true', $data );
+
+		wp_dequeue_script( 'bvm-editor' );
+	}
+
 	public function test_admin_assets_not_enqueued_on_other_screens(): void {
 		wp_set_current_user(
 			self::factory()->user->create( [ 'role' => 'editor' ] )

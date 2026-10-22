@@ -105,11 +105,16 @@ class Assets {
 			}
 		}
 
+		$tours_completed = get_user_meta( get_current_user_id(), Tours::META_KEY, true );
+
 		wp_localize_script(
 			'bvm-editor',
 			'BVM',
 			[
 				'restNamespace'       => Rest::NAMESPACE,
+				'toursCompleted'      => is_array( $tours_completed )
+					? (object) $tours_completed
+					: new \stdClass(),
 				'cpt'                 => BVM_CPT,
 				'adminUrl'            => admin_url( 'post.php' ),
 				'variationListUrl'    => add_query_arg(
