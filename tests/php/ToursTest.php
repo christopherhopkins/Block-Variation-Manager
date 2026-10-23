@@ -72,6 +72,63 @@ class ToursTest extends WP_UnitTestCase {
 		);
 	}
 
+	/**
+	 * The real pin on Tours::auth: an ADMINISTRATOR (who can edit_users, so
+	 * core alone would let the write through) must still be unable to change
+	 * another user's tour state. An editor-vs-editor check passes even with
+	 * the auth_callback deleted.
+	 */
+	public function test_admins_cannot_write_other_users_tour_state(): void {
+		$author = self::factory()->user->create( [ 'role' => 'author' ] );
+		update_user_meta( $author, Tours::META_KEY, [ 'management' => true ] );
+
+		wp_set_current_user(
+			self::factory()->user->create( [ 'role' => 'administrator' ] )
+		);
+		$request = new WP_REST_Request( 'POST', '/wp/v2/users/' . $author );
+		$request->set_body_params(
+			[ 'meta' => [ Tours::META_KEY => [ 'hacked' => true ] ] ]
+		);
+		rest_get_server()->dispatch( $request );
+
+		$this->assertSame(
+			[ 'management' => true ],
+			(array) get_user_meta( $author, Tours::META_KEY, true ),
+			'Another user\'s tour state must be immutable, even for admins.'
+		);
+	}
+
+	/**
+	 * Cross-user READS must not expose the key either (verified behavior of
+	 * core's meta handling for the users controller — pinned so a core or
+	 * registration change that starts leaking it fails loudly).
+	 */
+	public function test_tour_state_not_exposed_to_other_users(): void {
+		$author = self::factory()->user->create( [ 'role' => 'author' ] );
+		update_user_meta( $author, Tours::META_KEY, [ 'management' => true ] );
+		// A published post makes the user publicly visible in the REST API.
+		self::factory()->post->create(
+			[ 'post_author' => $author, 'post_status' => 'publish' ]
+		);
+
+		// A server carried over from an earlier test caches the users
+		// controller's item schema from before this key's registration state
+		// was relevant, which defeats context filtering. Production builds a
+		// fresh server per request — do the same here.
+		$GLOBALS['wp_rest_server'] = null;
+
+		foreach ( [ 0, self::factory()->user->create( [ 'role' => 'editor' ] ) ] as $viewer ) {
+			wp_set_current_user( $viewer );
+			$request  = new WP_REST_Request( 'GET', '/wp/v2/users/' . $author );
+			$data     = rest_get_server()->dispatch( $request )->get_data();
+			$this->assertArrayNotHasKey(
+				Tours::META_KEY,
+				(array) ( $data['meta'] ?? [] ),
+				'Tour state leaked to viewer ' . $viewer
+			);
+		}
+	}
+
 	public function test_rest_round_trip_via_users_me(): void {
 		$editor = self::factory()->user->create( [ 'role' => 'editor' ] );
 		wp_set_current_user( $editor );

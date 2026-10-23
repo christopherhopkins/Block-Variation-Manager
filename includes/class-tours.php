@@ -91,6 +91,11 @@ class Tours {
 					'schema' => [
 						'type'                 => 'object',
 						'additionalProperties' => [ 'type' => 'boolean' ],
+						// edit context only: without this, the map is visible
+						// to ANONYMOUS viewers on GET /wp/v2/users/{id} for
+						// any user with a published post (view-context meta
+						// has no per-key read auth). ToursTest pins it.
+						'context'              => [ 'edit' ],
 					],
 				],
 			]

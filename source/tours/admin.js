@@ -10,6 +10,7 @@ import 'driver.js/dist/driver.css';
 import './tour.scss';
 import { initTourState, autoStartTour, launchTour } from './state.js';
 
+/** Completion-map key of the management-screen tour (see BVM\Tours). */
 export const MANAGEMENT_TOUR_ID = 'management';
 
 /**

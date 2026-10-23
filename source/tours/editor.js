@@ -76,6 +76,7 @@ export function maybeAutoStartEditorTour() {
 /** Tour of the variation-editor screen (editing a bvm_variation post). */
 export const VARIATION_EDITOR_TOUR_ID = 'variation-editor';
 
+/** Declarative steps for the variation-editor screen tour (translations resolve at call time). */
 export function variationEditorTourSteps() {
 	return [
 		{

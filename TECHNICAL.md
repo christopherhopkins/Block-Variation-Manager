@@ -163,10 +163,17 @@ rendering.
 | `bvm_tours_completed` (`Tours::META_KEY`) | object map `{ tourId: true }` | The JS tour runtime through core `POST /wp/v2/users/me` (no PHP write path) | `Tours::enqueue_admin` / `Assets::enqueue_editor` localize the current user's map |
 
 Registered by `Tours::register_meta()` with `show_in_rest` (schema:
-`additionalProperties: boolean`), a sanitize callback (slug-safe keys,
-truthy-only, `MAX_TOURS` cap) and an auth callback restricting writes to the
-user's own meta. The value is an array of booleans — WP-serialized, not a
-JSON string — so §9.1 slashing has no call site here.
+`additionalProperties: boolean`, **`context: ['edit']`** — §9.22), a sanitize
+callback (slug-safe keys, truthy-only, `MAX_TOURS` cap) and an auth callback
+restricting writes to the user's own meta (verified: even administrators
+cannot write another user's map, and anonymous/cross-user REST reads never
+expose the key — all pinned in `ToursTest`). The value is an array of booleans — WP-serialized, not a JSON
+string — so §9.1 slashing has no call site here.
+
+Known limitation: `markCompleted` persists the **whole map** from a
+once-per-pageload seed, so two stale tabs can drop each other's flags
+(last-writer-wins). Self-healing — the lost tour merely auto-offers once
+more — and accepted over a read-before-write round trip.
 
 ---
 
@@ -764,6 +771,23 @@ call site must follow it. Audit:
 ```bash
 grep -rn "onDestroyed" source/
 # must return nothing
+```
+
+### 9.22 REST-exposed meta is PUBLIC unless its schema restricts `context`
+
+`register_meta( …, [ 'show_in_rest' => … ] )` defaults the key to the
+`view` + `edit` contexts, and the meta-fields controller applies **no per-key
+read auth** — `auth_callback` guards writes only. On a public object (a user
+with a published post, a public CPT) the value is then readable by ANONYMOUS
+REST clients. That silently leaked `bvm_tours_completed` on
+`GET /wp/v2/users/{id}` (caught by review; ToursTest pins the fix). Rule:
+every `show_in_rest` meta registration must set the narrowest `context` in
+its schema — `[ 'edit' ]` unless the value is genuinely public — and add a
+test that an anonymous/other-user read omits the key. Audit:
+
+```bash
+grep -rn -A8 "show_in_rest" includes/ | grep -L "'context'" || grep -rn "show_in_rest" includes/
+# review each registration without an explicit 'context'
 ```
 
 ---

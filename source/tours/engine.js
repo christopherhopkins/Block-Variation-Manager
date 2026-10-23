@@ -10,6 +10,7 @@ import { driver } from 'driver.js';
  * (e.g. "apply a variation" only shows when a variation exists).
  */
 
+/** @return {boolean} Whether the OS asks for reduced motion (tour fades off). */
 export function prefersReducedMotion() {
 	if ( typeof window.matchMedia !== 'function' ) {
 		return false;
