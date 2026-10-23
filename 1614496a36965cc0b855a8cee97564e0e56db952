@@ -1,0 +1,18 @@
+Task: Apply review suggestions (formal track review)
+
+Review verdict: medium/low findings only; the one escalated finding was
+empirically CONFIRMED and fixed — bvm_tours_completed was anonymously
+readable via GET /wp/v2/users/{id} (meta show_in_rest defaults to the view
+context with no per-key read auth). Fixed with schema context ['edit'];
+§9.22 added with audit grep. Auth contract now pinned with an admin
+cross-user write test and anonymous/other-user read tests (fresh REST
+server — a stale cross-test server defeats context filtering and masked the
+leak in isolation). Concurrent-tab limitation documented; JSDoc added on 3
+exports. Pre-existing bvm_variation post-meta registrations audited: safe
+(non-public CPT, anonymous REST 404).
+
+Invariants checked this review: §9.1 (grep clean), §9.21 (grep clean),
+§9.22 (new). Suites after fixes: Jest 201 w/ gates, PHPUnit 126 + 126
+multisite, Playwright 13/13 (pre-fix run; fixes touch no E2E-covered path
+behaviorally except narrowing REST read context, which tours.spec reads
+with context=edit as the owning user).
