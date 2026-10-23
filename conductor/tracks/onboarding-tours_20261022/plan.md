@@ -70,3 +70,7 @@
   - [x] TECHNICAL.md: tours architecture section (§3.6, §4.7, file tables) +
         new §9.21 invariant (landed with `c583b19`); README feature blurb
 - [x] Task: Phase Verification & Checkpoint (Refer to workflow.md)
+
+## Phase: Review Fixes
+
+- [x] Task: Apply review suggestions `1614496`
